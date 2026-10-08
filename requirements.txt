@@ -1,0 +1,10 @@
+playwright
+beautifulsoup4
+requests
+httpx
+python-dotenv
+viewstate==0.7.0
+fastapi
+uvicorn[standard]
+
+cryptography>=44,<47

@@ -1,0 +1,32 @@
+venv/
+.venv/
+
+__pycache__/
+*.py[cod]
+
+.env
+
+.vscode/
+
+*.log
+
+data/results/
+
+.DS_Store
+Thumbs.db
+# Local pre-repair backups
+backups/
+
+# Secrets, local source snapshots, and hosting metadata
+.env.*
+**/.env.*
+!.env.example
+.vercel/
+.pytest_cache/
+data/
+db_schema/output.txt
+db_schema/reports/
+*.pem
+*.key
+.vercel
+.env*

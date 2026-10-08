@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live RERA project search</title>
+<style>
+:root{font:16px/1.55 system-ui,sans-serif;color:#182e2c;background:#f4f6f3;--green:#175e50;--line:#dbe2dc}*{box-sizing:border-box}body{margin:0}header{border-bottom:1px solid var(--line);background:#fff}.wrap{max-width:1050px;margin:auto;padding:24px}header .wrap{display:flex;align-items:center;justify-content:space-between;gap:20px}.brand{font-weight:750;letter-spacing:-.5px}.badge{font-size:12px;border:1px solid #b9d9c6;background:#edf8ef;border-radius:30px;padding:5px 12px;color:#1c634a}main{padding-bottom:60px!important}h1{font-size:clamp(28px,5vw,43px);line-height:1.15;letter-spacing:-1.4px;margin:24px 0 12px}h2{font-size:22px;margin:0 0 12px}h3{font-size:16px;margin:0 0 8px}p{margin:0 0 16px}.muted{color:#59716b}.card{background:white;border:1px solid var(--line);border-radius:16px;padding:24px;margin:22px 0}label{display:block;font-size:14px;font-weight:650;margin-bottom:8px}input,button{font:inherit;border-radius:9px;padding:12px 15px}input{border:1px solid #b9c9c1;width:100%;min-width:0;background:#fff;color:#182e2c}input:focus{outline:3px solid #c0e4d6;border-color:var(--green)}button{border:1px solid var(--green);background:var(--green);color:white;cursor:pointer;font-weight:650;white-space:nowrap}button:hover{filter:brightness(.92)}button:disabled{opacity:.55;cursor:wait}.secondary{background:white;color:var(--green)}.row{display:flex;gap:12px;align-items:center}.row input{flex:1}.hint{font-size:13px;margin:12px 0 0}.status{min-height:25px;margin:14px 0;color:#315c50}.status.error{color:#a32d20}[hidden]{display:none!important}.captcha-row{display:flex;align-items:center;gap:18px;margin-bottom:16px}.captcha-row img{width:200px;height:60px;object-fit:contain;border:1px solid var(--line);background:#fff;border-radius:8px}.captcha-input{max-width:240px;text-transform:uppercase;letter-spacing:3px}.candidate{width:100%;text-align:left;white-space:normal;margin-top:10px;background:#f8faf7;border-color:var(--line);color:#182e2c}.candidate small{display:block;color:#59716b;font-weight:400;margin-top:4px}.result-head{display:flex;justify-content:space-between;align-items:start;gap:18px}.result-head h2{margin-bottom:3px}a{color:var(--green);overflow-wrap:anywhere}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;border-top:1px solid var(--line);padding-top:20px;margin-top:20px}.fact small{display:block;color:#59716b;font-size:12px;margin-bottom:3px}.fact strong{display:block;font-size:15px;font-weight:600;overflow-wrap:anywhere}details{border-top:1px solid var(--line);padding:16px 0}summary{cursor:pointer;font-weight:650}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;max-height:500px;overflow:auto;background:#f5f7f3;padding:16px;border-radius:8px}.documents{padding-left:20px}.documents li{padding:5px 0}.foot{font-size:12px;color:#59716b;margin-top:28px}@media(max-width:650px){.wrap{padding:18px}.card{padding:18px}.row{flex-direction:column;align-items:stretch}.facts{grid-template-columns:repeat(2,1fr)}.result-head{flex-direction:column}header .wrap{gap:10px}.badge{font-size:11px}.captcha-row{flex-wrap:wrap}}
+
+.data-section{margin:20px 0;min-width:0}.table-wrap{max-width:100%;overflow:auto;border:1px solid var(--line);border-radius:10px;max-height:480px}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top;min-width:120px;max-width:360px;overflow-wrap:anywhere}th{background:#edf3ef;position:sticky;top:0;z-index:1;font-size:12px;color:#315c50}tbody tr:nth-child(even){background:#f8faf8}tbody tr:last-child td{border-bottom:0}.table-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0}.table-tools input{max-width:320px}.table-tools button{padding:6px 12px;font-size:13px}.table-tools small{color:#59716b}.field-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:12px 0}.field-list dt{font-size:12px;color:#59716b}.field-list dd{margin:4px 0 0;overflow-wrap:anywhere;font-size:14px}.empty{color:#59716b;font-size:14px;padding:12px 0}.data-section h3{margin-bottom:12px}td .field-list{display:block}td .field-list dt{margin-top:8px}
+</style>
+</head>
+<body>
+<header><div class="wrap"><div class="brand">Property Due Diligence</div><span class="badge">Live source · UP-RERA</span></div></header>
+<main class="wrap">
+<h1>Search a project.<br>Get its details live.</h1>
+<p class="muted">Fetch current information directly from Uttar Pradesh RERA.</p>
+<section class="card">
+<form id="searchForm"><label for="query">What do you remember about the project?</label><div class="row"><input id="query" name="query" placeholder="e.g. Sector 150 Noida, Oro City, or a builder name" minlength="3" maxlength="300" required autocomplete="off"><button id="searchButton" type="submit">Search projects</button></div><p class="hint muted">Try a name, builder, locality or address with its city. A RERA number is optional. Address searches automatically check all projects returned for the district and show matches as they are found. Broad searches can take several minutes. UP-RERA may ask for a CAPTCHA.</p></form>
+<p id="status" class="status" role="status" aria-live="polite">Ready to search UP-RERA.</p>
+<form id="captchaForm" hidden><label for="captchaInput">Enter the CAPTCHA from UP-RERA</label><div class="captcha-row"><img id="captchaImage" alt="CAPTCHA supplied by UP-RERA"><button id="refreshCaptcha" type="button" class="secondary">New image</button></div><div class="row"><input id="captchaInput" class="captcha-input" autocomplete="off" maxlength="20" required><button id="captchaButton" type="submit">Continue live search</button></div></form>
+<div id="candidates" hidden><h3>Select your project</h3><div id="candidateList"></div></div>
+</section>
+<section id="result" class="card" hidden>
+<div class="result-head"><div><span class="badge">Fetched from RERA now</span><h2 id="projectName" style="margin-top:14px"></h2><p id="registration" class="muted"></p></div><button id="exportButton" class="secondary">Download this result</button></div>
+<p class="hint"><a id="sourceLink" target="_blank" rel="noopener noreferrer">Open official source</a><span id="fetchedAt" class="muted"></span></p><div id="facts" class="facts"></div>
+<details open style="margin-top:24px"><summary id="documentsTitle">Documents</summary><ul id="documentList" class="documents"></ul></details>
+<details open><summary id="landTitle">Land and deed records</summary><div id="landData"></div></details>
+<details><summary>Plans and units</summary><div id="unitsData"></div></details>
+<details><summary>Additional project information</summary><div id="additionalData"></div></details>
+<details><summary>Raw JSON (advanced)</summary><pre id="rawJson"></pre></details>
+</section>
+<p class="foot">Results are held only for this browser session. Save a copy using “Download this result” if needed. Documents open from RERA when selected. Current source coverage: Uttar Pradesh.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);let sessionId=null,sessionState=null,record=null,busy=false;
+function setBusy(value,message){busy=value;document.querySelectorAll('button').forEach(b=>b.disabled=value);$('query').disabled=value;if(message){$('status').textContent=message;$('status').className='status';}}
+function showError(error){$('status').textContent=error.message||'The live request failed. Please try again.';$('status').className='status error';}
+async function call(path,body,method='POST'){if(sessionState&&method==='POST'&&path!=='/api/live/search')body={...body,session_state:sessionState};const response=await fetch(path,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});const data=await response.json();if(!response.ok)throw new Error(data.message||(typeof data.detail==='string'?data.detail:'The request could not be completed.'));if(response.ok){sessionState=data.session_state||null;}return data;}
+function safeUrl(value){try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)?url.href:null;}catch{return null;}}
+const fieldLabels={download_url:'Document link',file_name:'File name',serial_number:'No.',khasra_plot_details:'Khasra / plot records',registry_agreement_details:'Registry / deed records',khasra_plot_number:'Khasra / plot number',area_sq_m:'Area (m²)',registry_agreement_number:'Registry / agreement number',registry_agreement_date:'Registry / agreement date',document_type:'Document type'};
+function readableLabel(key){return fieldLabels[key]||key.replace(/_/g,' ').replace(/\bsq m\b/g,'(m²)').replace(/^./,c=>c.toUpperCase());}
+function node(tag,text,className){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(className)el.className=className;return el;}
+function structuredValue(parent,value,title='Records'){
+  if(value===null||value===undefined||value===''){parent.append(node('span','Not provided','muted'));return;}
+  if(Array.isArray(value)){
+    if(!value.length){parent.append(node('p','No records listed by the source.','empty'));return;}
+    const rows=value.map(item=>item!==null&&typeof item==='object'&&!Array.isArray(item)?item:{value:item});
+    const keys=[...new Set(rows.flatMap(item=>Object.keys(item)))];
+    const tools=node('div',undefined,'table-tools'),search=node('input');search.type='search';search.placeholder='Filter these records';search.setAttribute('aria-label',`Filter ${title}`);
+    const count=node('small'),prev=node('button','Previous','secondary'),next=node('button','Next','secondary');prev.type=next.type='button';
+    const wrap=node('div',undefined,'table-wrap');wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label',title);
+    const table=node('table'),head=node('thead'),heading=node('tr'),body=node('tbody');
+    for(const key of keys){const th=node('th',readableLabel(key));th.scope='col';heading.append(th);}head.append(heading);table.append(head,body);wrap.append(table);tools.append(search,count,prev,next);parent.append(tools,wrap);
+    const searchable=rows.map(row=>JSON.stringify(row).toLocaleLowerCase());let page=0,filtered=rows;const size=50;
+    function draw(){body.replaceChildren();const start=page*size;for(const row of filtered.slice(start,start+size)){const tr=node('tr');for(const key of keys){const td=node('td');structuredValue(td,row[key],readableLabel(key));tr.append(td);}body.append(tr);}if(!filtered.length){const td=node('td','No matching records.');td.colSpan=keys.length;const tr=node('tr');tr.append(td);body.append(tr);}count.textContent=filtered.length?`${start+1}–${Math.min(start+size,filtered.length)} of ${filtered.length} records`:'0 matching records';prev.disabled=page===0;next.disabled=start+size>=filtered.length;prev.hidden=next.hidden=filtered.length<=size;}
+    search.oninput=()=>{const query=search.value.trim().toLocaleLowerCase();filtered=rows.filter((_,i)=>searchable[i].includes(query));page=0;draw();};prev.onclick=()=>{if(page>0){page--;draw();}};next.onclick=()=>{if((page+1)*size<filtered.length){page++;draw();}};draw();return;
+  }
+  if(typeof value==='object'){
+    const entries=Object.entries(value);if(!entries.length){parent.append(node('p','No information listed by the source.','empty'));return;}
+    const fields=node('dl',undefined,'field-list');
+    for(const [key,item]of entries.filter(([,v])=>v===null||typeof v!=='object')){const pair=node('div');pair.append(node('dt',readableLabel(key)));const dd=node('dd');structuredValue(dd,item,readableLabel(key));pair.append(dd);fields.append(pair);}if(fields.childElementCount)parent.append(fields);
+    for(const [key,item]of entries.filter(([,v])=>v!==null&&typeof v==='object')){const section=node('section',undefined,'data-section');section.append(node('h3',readableLabel(key)+(Array.isArray(item)?` (${item.length})`:'')));structuredValue(section,item,readableLabel(key));parent.append(section);}return;
+  }
+  if(typeof value==='string'&&/^https?:\/\//i.test(value)&&safeUrl(value)){const link=node('a','Open document');link.href=safeUrl(value);link.target='_blank';link.rel='noopener noreferrer';link.title=value;parent.append(link);return;}
+  parent.append(node('span',String(value)));
+}
+function showStructured(id,value){const target=$(id);target.replaceChildren();structuredValue(target,value);}
+function render(data){$('captchaForm').hidden=true;$('candidates').hidden=true;if(data.session_id)sessionId=data.session_id;
+if(data.status==='captcha_required'){$('captchaImage').src=data.captcha_image;$('captchaInput').value='';$('captchaForm').hidden=false;$('status').textContent=data.message;setTimeout(()=>$('captchaInput').focus(),0);return;}
+if(data.status==='select_project'){$('candidateList').replaceChildren();for(const p of data.projects){const b=document.createElement('button');b.className='candidate';b.type='button';const name=document.createElement('span');name.textContent=p.project_name;const detail=document.createElement('small');detail.textContent=`${p.registration_number} · ${p.district} · ${p.promoter_name}${p.address ? ` · ${p.address}` : ""}`;b.append(name,detail);b.onclick=()=>choose(p.registration_number);$('candidateList').append(b);}$('candidates').hidden=data.projects.length===0;$('status').textContent=data.message;return;}
+if(data.status==='not_found'){sessionId=null;$('status').textContent=data.message;return;}if(data.status!=='complete')throw new Error('Unexpected response from the live scraper.');
+sessionId=null;record=data.result;const p=record.property_data,basic=p.basic_details||{};$('projectName').textContent=p.identification.project_name;$('registration').textContent=record.registration_number;$('sourceLink').href=safeUrl(record.project_details_url);$('fetchedAt').textContent=` · Retrieved ${new Date(record.scraped_at).toLocaleString()}`;$('facts').replaceChildren();
+const facts=[['Promoter',p.promoter?.name],['District',basic.district],['Category',basic.project_category],['Area (sq. m)',basic.total_area_sq_m],['Completion date',basic.proposed_completion_date],['Authority',basic.sanctioning_competent_authority],['Address',basic.address],['Project type',basic.project_type],['Registration date',p.identification.registration_date]];
+for(const [label,value]of facts){const item=document.createElement('div');item.className='fact';const k=document.createElement('small'),v=document.createElement('strong');k.textContent=label;v.textContent=value||'Not provided by source';item.append(k,v);$('facts').append(item);}
+$('documentList').replaceChildren();const docs=p.documents||[];$('documentsTitle').textContent=`Documents (${docs.length})`;for(const doc of docs){const li=document.createElement('li'),url=safeUrl(doc.download_url),item=document.createElement(url?'a':'span');item.textContent=doc.document_name||doc.file_name||'Document';if(url){item.href=url;item.target='_blank';item.rel='noopener noreferrer';}li.append(item);$('documentList').append(li);}if(!docs.length){const li=document.createElement('li');li.textContent='No documents were listed in this source section.';$('documentList').append(li);}
+const land=p.land_details||{};$('landTitle').textContent=`Land and deed records (${(land.khasra_plot_details||[]).length+(land.registry_agreement_details||[]).length})`;showStructured('landData',land);showStructured('unitsData',p.plan_and_unit_details||{});showStructured('additionalData',Object.fromEntries(Object.entries(p).filter(([key])=>!['land_details','plan_and_unit_details','documents','page'].includes(key))));$('rawJson').textContent=JSON.stringify(record,null,2);$('result').hidden=false;$('status').textContent='Live fetch complete. The registration on the source page has been verified.';}
+async function continueSearch(data){
+  while(true){
+    render(data);
+    if(data.status!=='select_project'||!data.has_more)return;
+    setBusy(true);
+    let lastError;
+    for(let attempt=0;attempt<3;attempt++){
+      try{data=await call(`/api/live/search/${sessionId}/more`,{});lastError=null;break;}
+      catch(error){lastError=error;if(attempt<2)await new Promise(resolve=>setTimeout(resolve,1000*(attempt+1)));}
+    }
+    if(lastError)throw new Error('Search interrupted before all projects were checked. The displayed matches are incomplete. '+lastError.message);
+  }
+}
+async function action(message,fn){if(busy)return;setBusy(true,message);try{await continueSearch(await fn());}catch(error){showError(error);}finally{setBusy(false);}}
+$('searchForm').onsubmit=async event=>{event.preventDefault();if(busy)return;const query=$('query').value.trim();record=null;$('result').hidden=true;$('captchaForm').hidden=true;$('candidates').hidden=true;const previous=sessionId;sessionId=null;await action('Contacting UP-RERA for current project information…',async()=>{if(previous)await call(`/api/live/search/${previous}`,undefined,'DELETE').catch(()=>{});return call('/api/live/search',{query});});};
+$('captchaForm').onsubmit=event=>{event.preventDefault();action('Searching RERA and fetching the current project details…',()=>call(`/api/live/search/${sessionId}/captcha`,{captcha:$('captchaInput').value.trim()}));};
+$('refreshCaptcha').onclick=()=>action('Requesting a new CAPTCHA from RERA…',()=>call(`/api/live/search/${sessionId}/refresh-captcha`,{}));
+async function choose(registration_number){await action('Fetching this project directly from RERA…',()=>call(`/api/live/search/${sessionId}/project`,{registration_number}));}
+$('exportButton').onclick=()=>{if(!record)return;const url=URL.createObjectURL(new Blob([JSON.stringify(record,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=record.registration_number.replace(/[^a-z0-9_-]/gi,'_')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+</script>
+</body>
+</html>

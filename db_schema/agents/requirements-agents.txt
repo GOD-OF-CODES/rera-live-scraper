@@ -1,0 +1,22 @@
+# anthropic is only needed if you set AGENT_LLM_BACKEND=anthropic
+anthropic>=0.40.0
+# requests is what talks to your local Ollama server AND downloads
+# documents for the extractor - required either way
+requests>=2.31.0
+pydantic>=2.0
+rapidfuzz>=3.0
+fastapi
+uvicorn[standard]
+psycopg2-binary
+python-dotenv
+
+# document_processing/pdf pipeline (PDF text + OCR extraction)
+pymupdf>=1.24.0
+pytesseract>=0.3.10
+pillow>=10.0.0
+# ^ pytesseract is a wrapper - you ALSO need the Tesseract OCR binary
+#   installed system-wide (not pip-installable):
+#     Windows: https://github.com/UB-Mannheim/tesseract/wiki
+#     Mac:     brew install tesseract
+#     Linux:   apt install tesseract-ocr
+#   Verify with: tesseract --version
