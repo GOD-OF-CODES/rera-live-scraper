@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup, SoupStrainer
 
-from src.scraper.search_intent import interpret, matches
+from src.scraper.search_intent import interpret, matches, matching_parcels
 from src.scraper.browser import BrowserManager
 from src.scraper.detail_page import scrape_detail_page
 from src.scraper.project_links import (
@@ -162,16 +162,17 @@ def fetch_project_http(details_url, registration_number=None, summary=None):
 
 
 def fetch_search_fields(details_url, registration_number, summary=None):
-    """Read server-rendered location fields without a browser or table extraction."""
+    """Read location fields and, for parcel queries, identifier columns over HTTP."""
     url = official_detail_url(details_url)
     with requests.get(url, timeout=(10, 30)) as response:
         response.raise_for_status()
         if official_detail_url(response.url) != url:
             raise LiveScrapeError("RERA redirected the address check to another project.")
-        return parse_search_fields(response.text, registration_number)
+        return parse_search_fields(response.text, registration_number,
+                                   include_parcels=bool(summary and summary.get('_search_parcels')))
 
 
-def parse_search_fields(html, registration_number):
+def parse_search_fields(html, registration_number, include_parcels=False):
     ids = {"lblProjectNameWithID", "lblProjectName", "projetaddress", "lblVillage", "ddlDistrict"}
     soup = BeautifulSoup(html, "html.parser", parse_only=SoupStrainer(
         id=lambda value: value and value.removeprefix("ctl00_ContentPlaceHolder1_") in ids))
@@ -188,10 +189,51 @@ def parse_search_fields(html, registration_number):
     identity = re.search(r"Project Id\s*:\s*\(([^)]+)\)", value("lblProjectNameWithID"), re.I)
     if not identity or normalize_registration(identity[1]) != normalize_registration(registration_number) or not value("lblProjectName"):
         raise LiveScrapeError("The address check returned an invalid or different project.")
-    return {"property_data": {"basic_details": {
+    result = {"property_data": {"basic_details": {
         "address": value("projetaddress"), "village_locality_sector": value("lblVillage"),
         "district": value("ddlDistrict"),
     }}}
+    if include_parcels:
+        result['property_data']['search_parcels'] = parse_parcel_tables(html)
+    return result
+
+
+def parse_parcel_tables(html):
+    """Read identifier columns only, including collapsed old/new RERA tables."""
+    soup = BeautifulSoup(html, 'html.parser', parse_only=SoupStrainer('table'))
+    records = []
+    for table in soup.find_all('table'):
+        if table.find('table'):
+            continue
+        columns = {}
+        width = 0
+        type_column = None
+        for row in table.find_all('tr'):
+            cells = row.find_all(['td', 'th'], recursive=False)
+            values = [cell.get_text(' ', strip=True) for cell in cells]
+            headers = {}
+            for index, value in enumerate(values):
+                label = re.sub(r'[^a-z]+', ' ', value.lower()).strip()
+                if re.fullmatch(r'(?:khasra(?: plot)?|plot|villa plot) (?:no|number|nos|numbers)', label):
+                    kinds = [kind for kind in ('khasra', 'plot') if kind in label]
+                    headers[index] = (kinds, value)
+            if headers:
+                columns = headers
+                width = len(values)
+                type_column = next((i for i, value in enumerate(values)
+                                    if value.strip().lower() == 'type'), None)
+                continue
+            if len(values) != width or any(cell.get('colspan', '1') != '1' for cell in cells):
+                continue
+            for index, (kinds, label) in columns.items():
+                if index < len(values) and values[index]:
+                    # Modern pages use a Khasra No column for both kinds and
+                    # distinguish Plot records in a separate Type column.
+                    record_type = values[type_column].lower() if type_column is not None else ''
+                    record_kinds = [record_type] if record_type in ('plot', 'khasra') else kinds
+                    records.append({'number': values[index], 'kinds': record_kinds,
+                                    'source': f'Published RERA table: {label}'})
+    return records
 
 
 @dataclass
@@ -281,6 +323,10 @@ class LiveScraper:
         soup = BeautifulSoup(html, "html.parser")
         state.fields = form_values(soup)
         state.intent = interpret(state.query, soup, PREFIX)
+        if state.intent.get('parcels') and not state.intent['district']:
+            raise LiveScrapeError('Include a city or district with the plot/khasra number, '
+                                 'for example "Khasra 123/4 Lucknow" or "Plot GH-03 Noida".',
+                                 'refine_query', 422)
         captcha = soup.select_one('img[src*="CaptchaImage"]')
         if not captcha:
             raise LiveScrapeError("RERA's CAPTCHA image is unavailable. Try a new search.")
@@ -389,17 +435,26 @@ class LiveScraper:
         """Bounded live address discovery; never download or retain a district dataset."""
         batch = state.candidates[state.scan_offset:state.scan_offset + 12]
         terms = state.intent["terms"]
+        parcels = state.intent.get('parcels', [])
 
         def check(row):
             try:
                 with self.scan_slots:
-                    data = self.scanner(row["details_url"], row["registration_number"], row)
+                    scan_row = dict(row, _search_parcels=True) if parcels else row
+                    data = self.scanner(row["details_url"], row["registration_number"], scan_row)
                 prop = data.get("property_data", {})
                 address = prop.get("basic_details", {}).get("address", "") or ""
                 locality = prop.get("basic_details", {}).get("village_locality_sector", "") or ""
                 text = " ".join([row["project_name"], row["promoter_name"], row["district"], address, locality])
-                return (dict(row, address=address or locality, match_reason="Clues matched on the live RERA page")
-                        if matches(terms, text) else None), False
+                evidence = matching_parcels(parcels, prop.get('search_parcels', []), address) if parcels else []
+                if not matches(terms, text) or (parcels and not evidence):
+                    return None, False
+                match = dict(row, address=address or locality,
+                             match_reason="Published parcel identifier matched" if parcels else
+                             "Clues matched on the live RERA page")
+                if evidence:
+                    match['matched_parcels'] = evidence
+                return match, False
             except (LiveScrapeError, requests.RequestException):
                 return None, True
 

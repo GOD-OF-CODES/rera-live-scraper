@@ -53,6 +53,38 @@ Every new search/fetch contacts RERA again. Source errors are shown explicitly;
 there is no fallback to previously saved project data. RERA's CAPTCHA and source
 availability still apply. “Live” means fetched on request, not continuous monitoring.
 
+## Search by plot or khasra number
+
+Enter a labelled identifier with its city or district, for example:
+
+- `Khasra 123/4 Lucknow`
+- `Plot GH-03 Noida`
+- `Plot No. 23 Sector 150 Noida`
+
+The same `/api/live/search` endpoint and CAPTCHA workflow support these inputs
+locally and on Vercel. A city/district is required because parcel numbers repeat
+across locations. Additional locality words narrow matches against the published
+project address/locality. Bare numbers are not a dedicated parcel lookup; use
+`Plot` or `Khasra` explicitly.
+
+After the CAPTCHA, the scraper checks the projects returned by RERA for the
+chosen district in batches of 12, with up to six concurrent HTTP checks. It reads
+identifier columns in old/new land tables and explicitly labelled plot-number
+columns, including collapsed tables. Plot queries can also match an explicitly
+labelled plot number in the project address. Parcel identifiers are matched
+exactly (ignoring case and spaces around `/` and `-`): `123` does not match
+`1234` or `123/4`, and `GH-03` does not match `GH-030`. Comma-separated identifiers
+in a source cell are supported; ranges are not expanded.
+
+Candidates show the matched published identifier and its source. Select a
+project to fetch its complete details afresh. A match identifies a possible RERA
+project, not an independently verified land parcel or proof of ownership. Some
+RERA columns combine khasra/plot identifiers without distinguishing their type.
+Coverage is limited to published RERA projects and supported table/address
+fields, not all Bhulekh land records; missing or differently formatted source
+records may not match. Source failures are retried and labelled incomplete as in
+address searches. No land dataset or result cache is persisted.
+
 ## Storage behavior
 
 - Returned project records remain in the user's browser until the page is closed
