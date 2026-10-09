@@ -33,7 +33,8 @@ Use `python main.py --port 8002` to select another local port.
    groups of 12, with up to six concurrent lightweight HTTP checks. These read
    only identity and location fields, including the separate village/sector field,
    without launching browsers or extracting unit/document tables. Full extraction
-   runs only for the selected project. The browser continues automatically until every candidate has been checked,
+   runs only for a project you open. Matches can be opened in separate tabs
+   immediately while the original tab continues searching. The browser continues automatically until every candidate has been checked,
    showing accumulated matches and progress without a load-more button. Failed
    pages get up to three attempts; unresolved failures are labelled incomplete. Results show the address for disambiguation; they are possible
    matches, not proof that a vague description identifies a unique property.
@@ -76,8 +77,11 @@ exactly (ignoring case and spaces around `/` and `-`): `123` does not match
 `1234` or `123/4`, and `GH-03` does not match `GH-030`. Comma-separated identifiers
 in a source cell are supported; ranges are not expanded.
 
-Candidates show the matched published identifier and its source. Select a
-project to fetch its complete details afresh. A match identifies a possible RERA
+Candidates show the matched published identifier and its source. Open a
+project in a new tab to fetch its complete details afresh while the original
+tab continues searching. Each project tab has its own request state; opening a
+match does not consume, cancel or rewind the ongoing search. Keep the search
+tab open until the scan finishes. A match identifies a possible RERA
 project, not an independently verified land parcel or proof of ownership. Some
 RERA columns combine khasra/plot identifiers without distinguishing their type.
 Coverage is limited to published RERA projects and supported table/address
