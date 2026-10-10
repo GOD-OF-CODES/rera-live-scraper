@@ -175,7 +175,7 @@ def fetch_search_fields(details_url, registration_number, summary=None, *, sessi
 
 def parse_search_fields(html, registration_number, include_parcels=False):
     from lxml import html as html_parser
-    root = html_parser.fromstring(html)
+    root = html_parser.fromstring(html or '<html/>')
 
     def value(suffix):
         elements = root.xpath('//*[@id=$id]', id='ctl00_ContentPlaceHolder1_' + suffix)
@@ -204,7 +204,7 @@ def parse_search_fields(html, registration_number, include_parcels=False):
 def parse_parcel_tables(html, root=None):
     """Read only published identifier columns, preserving type and compound IDs."""
     from lxml import html as html_parser
-    root = root if root is not None else html_parser.fromstring(html)
+    root = root if root is not None else html_parser.fromstring(html or '<html/>')
     records = []
     for table in root.iter('table'):
         if table.xpath('.//table'):

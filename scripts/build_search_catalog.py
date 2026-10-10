@@ -20,6 +20,8 @@ def publish(source, target):
     target.initialize()
     tables = ['rera_search_projects', 'rera_search_tokens', 'rera_search_parcels', 'rera_search_metadata']
     with source.connection() as src, target.connection(write=True) as dst:
+        if not source.postgres:
+            src.execute('BEGIN')  # Keep all four COPY inputs on one SQLite snapshot.
         # Serialize concurrent publishers; readers retain the previous snapshot until commit.
         dst.execute('SELECT pg_advisory_xact_lock(74239102)')
         dst.execute("SET LOCAL statement_timeout='120s'")

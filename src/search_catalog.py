@@ -105,6 +105,20 @@ class Catalog:
             for statement in SCHEMA.split(';'):
                 if statement.strip():
                     self.execute(connection, statement)
+            create = 'CREATE OR REPLACE VIEW' if self.postgres else 'CREATE VIEW IF NOT EXISTS'
+            aggregate = 'string_agg' if self.postgres else 'group_concat'
+            # A convenient spreadsheet-like view, backed by normalized parcel rows.
+            self.execute(connection, f"""{create} rera_search_catalog AS
+                SELECT p.*,
+                (SELECT {aggregate}(identifier, ', ') FROM
+                    (SELECT identifier FROM rera_search_parcels
+                     WHERE registration_number=p.registration_number AND kind='plot'
+                     ORDER BY identifier) n) AS plot_numbers,
+                (SELECT {aggregate}(identifier, ', ') FROM
+                    (SELECT identifier FROM rera_search_parcels
+                     WHERE registration_number=p.registration_number AND kind='khasra'
+                     ORDER BY identifier) n) AS khasra_numbers
+                FROM rera_search_projects p""")
 
     def metadata(self, values):
         with self.connection(write=True) as connection:

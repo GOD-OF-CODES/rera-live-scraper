@@ -11,6 +11,8 @@ from pathlib import Path
 import time
 import threading
 import requests
+import subprocess
+import sys
 
 from src.scraper.live import fetch_search_fields
 from src.scraper.district_dataset import atomic_write_json, safe_filename
@@ -22,6 +24,8 @@ def main():
     parser.add_argument('--output', default='data/search_catalog')
     parser.add_argument('--workers', type=int, default=4)
     parser.add_argument('--max-age-hours', type=float, default=168)
+    parser.add_argument('--publish', action='store_true', help='Build and publish checkpoints to the configured Neon database')
+    parser.add_argument('--publish-every', type=int, default=250)
     args = parser.parse_args()
     source = json.loads(Path(args.directory).read_text())
     output = Path(args.output)
@@ -56,18 +60,33 @@ def main():
         return row['registration_number'], False
 
     failures = []
-    with ThreadPoolExecutor(max_workers=max(1, min(args.workers, 6))) as pool:
+    def publish_checkpoint():
+        if args.publish:
+            completed = subprocess.run([sys.executable, '-m', 'scripts.build_search_catalog',
+                                        '--source', str(output), '--publish'], capture_output=True, text=True)
+            if completed.returncode:
+                # Credentials/driver diagnostics must not enter progress logs.
+                print('Publish failed; local checkpoints retained. Retry build_search_catalog --publish.', flush=True)
+                return False
+            print('Published current checkpoint to Neon.', flush=True)
+        return True
+
+    with ThreadPoolExecutor(max_workers=max(1, min(args.workers, 12))) as pool:
         for i, future in enumerate(as_completed([pool.submit(fetch, item) for item in pending]), 1):
             reg, ok = future.result()
             if not ok:
                 failures.append(reg)
-            if i % 50 == 0 or not ok or i == len(pending):
+            if i % 50 == 0 or i == len(pending):
                 print(f"Checked {i}/{len(pending)}; failed {len(failures)}; last {reg}", flush=True)
+            if i % max(50, args.publish_every) == 0:
+                publish_checkpoint()
     atomic_write_json(output / '_refresh_report.json', {
         'finished_at': datetime.now(timezone.utc).isoformat(),
         'directory_projects': len(source['rows']), 'attempted': len(pending),
         'failed_registrations': failures,
     })
+    if not publish_checkpoint():
+        raise SystemExit(1)
 
 
 if __name__ == '__main__':

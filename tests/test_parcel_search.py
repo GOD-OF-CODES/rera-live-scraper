@@ -199,3 +199,11 @@ def test_dashboard_submits_parcel_query_and_displays_match_evidence():
         assert 'Matched plot GH-03: GH-03' in page.locator('.candidate').inner_text()
         assert len(calls) == 2
         browser.close()
+
+
+def test_empty_source_page_is_rejected_as_source_error():
+    from src.scraper.live import parse_search_fields, parse_parcel_tables, LiveScrapeError
+    import pytest
+    with pytest.raises(LiveScrapeError):
+        parse_search_fields('', 'UPRERAPRJ123', include_parcels=True)
+    assert parse_parcel_tables('') == []

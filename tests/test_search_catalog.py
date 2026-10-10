@@ -59,6 +59,11 @@ def test_coverage_pagination_registration_and_injection(catalog):
     assert catalog.search('UPRERAPRJ1')['total'] == 1
     assert catalog.search("'; DROP TABLE rera_search_projects; --")['total'] == 0
     assert catalog.coverage()['projects'] == 4
+    with catalog.connection() as connection:
+        view = connection.execute("SELECT plot_numbers, khasra_numbers FROM rera_search_catalog "
+                                  "WHERE registration_number='UPRERAPRJ1'").fetchone()
+        assert view['plot_numbers'] == 'GH-03'
+        assert view['khasra_numbers'] == '123/4'
 
 
 def test_old_or_incomplete_import_cannot_erase_verified_fields(catalog):

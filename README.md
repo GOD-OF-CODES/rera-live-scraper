@@ -66,6 +66,16 @@ These tables are separate from the older `projects`/agent tables:
 | `rera_search_parcels` | Separate `kind` (`plot`/`khasra`), exact identifier and registration columns |
 | `rera_search_metadata` | Directory provenance and index build dates |
 
+For a single SQL view with separate `plot_numbers` and `khasra_numbers` columns,
+query `rera_search_catalog`. For example:
+
+```sql
+SELECT registration_number, project_name, district, address, locality,
+       sectors, plot_numbers, khasra_numbers, source_checked_at
+FROM rera_search_catalog
+WHERE district = 'Gautam Buddha Nagar';
+```
+
 The schema is idempotent. No existing legacy tables are dropped or modified.
 A summary-only or older import cannot overwrite newer inspected fields. Normal
 public API requests only read the database; imports run through local maintenance
@@ -88,7 +98,7 @@ The refresh writes atomic per-project checkpoints in `data/search_catalog/` and
 resumes after interruptions. It skips pages checked in the last seven days by
 default; use `--max-age-hours 0` to force a refresh. Failed pages are tried three
 times, reported in `_refresh_report.json`, and retried on the next run. At most
-six concurrent source requests are used. These jobs can take substantial time;
+six concurrent source requests are used by default (configurable, capped at 12). These jobs can take substantial time;
 user searches query their completed index instead of waiting for the job.
 
 Publish the completed local index to the configured Neon database:
@@ -96,6 +106,11 @@ Publish the completed local index to the configured Neon database:
 ```bash
 python -m scripts.build_search_catalog --publish
 ```
+
+For a long refresh, `python -m scripts.refresh_search_catalog --workers 6 --publish`
+also publishes progress every 250 attempted pages and at completion. A failed
+publish retains the local checkpoints for retry. There is no public write/admin
+endpoint and no automatic recurring scrape scheduled by the web application.
 
 Publishing uses PostgreSQL COPY in one transaction. Existing readers see the
 previous index until commit; a failed upload rolls back. It replaces only the
