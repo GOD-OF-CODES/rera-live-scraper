@@ -96,9 +96,14 @@ python -m scripts.build_search_catalog
 
 The refresh writes atomic per-project checkpoints in `data/search_catalog/` and
 resumes after interruptions. It skips pages checked in the last seven days by
-default; use `--max-age-hours 0` to force a refresh. Failed pages are tried three
-times, reported in `_refresh_report.json`, and retried on the next run. At most
-six concurrent source requests are used by default (configurable, capped at 12). These jobs can take substantial time;
+default; use `--max-age-hours 0` to force a refresh. Failed pages are tried four
+times, with increasing delays and fresh HTTP sessions after the first failure.
+The maintenance job allows 60 seconds for source reads; change these limits with
+`--attempts` and `--read-timeout`. `_refresh_report.json` records each project's
+outcome, attempt count, error types and HTTP status when available, including
+errors recovered by a retry. Reports are checkpointed every 50 completed projects.
+Missing pages are retried on the next run. Four concurrent source requests are
+used by default (configurable, capped at 12). These jobs can take substantial time;
 user searches query their completed index instead of waiting for the job.
 
 Publish the completed local index to the configured Neon database:

@@ -161,11 +161,11 @@ def fetch_project_http(details_url, registration_number=None, summary=None):
             "search_result": summary or {}, "property_data": data}
 
 
-def fetch_search_fields(details_url, registration_number, summary=None, *, session=None):
+def fetch_search_fields(details_url, registration_number, summary=None, *, session=None, timeout=(10, 30)):
     """Read location fields and, for parcel queries, identifier columns over HTTP."""
     url = official_detail_url(details_url)
     http = session or requests
-    with http.get(url, timeout=(10, 30)) as response:
+    with http.get(url, timeout=timeout) as response:
         response.raise_for_status()
         if official_detail_url(response.url) != url:
             raise LiveScrapeError("RERA redirected the address check to another project.")
