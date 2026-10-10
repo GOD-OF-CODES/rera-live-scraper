@@ -8,3 +8,5 @@ fastapi
 uvicorn[standard]
 
 cryptography>=44,<47
+psycopg[binary]>=3.2,<4
+lxml>=5,<7

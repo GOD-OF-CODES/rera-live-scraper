@@ -1,11 +1,12 @@
-# Live Property Due Diligence Scraper
+# UP-RERA project search
 
-The main application retrieves a requested project **directly from RERA at request
-time**. It does not require PostgreSQL, a district dataset, a saved project index,
-or an existing JSON result. It does not automatically save project information.
-Current source support is **Uttar Pradesh RERA**.
+Search the database for project names, builders, registration numbers, districts,
+sectors, addresses, plot numbers and khasra numbers. Opening a match fetches its
+**current details directly from UP-RERA** using the official internal project URL.
+The database stores search metadata and its source-check date; it does not present
+old project details as live information.
 
-## Start
+## Start locally
 
 ```bash
 python3 -m venv .venv
@@ -14,209 +15,148 @@ python3 -m venv .venv
 .venv/bin/python main.py
 ```
 
-Open **http://127.0.0.1:8000**. On Windows, activate `.venv\Scripts\Activate.ps1`
-and use `python` in place of `.venv/bin/python`. No `.env`, database credentials,
-LLM service, or district preload is needed.
+Open http://127.0.0.1:8000. Use `python main.py --port 8002` for another port.
+Set `RERA_DATABASE_URL` (or `DATABASE_URL`) in the ignored `.env.local` to use Neon.
+Use a pooled PostgreSQL connection URL with TLS. If no URL is configured, the app
+uses `data/rera_search.sqlite` when present; otherwise it supports live search only.
+Do not put credentials in Git or the browser. The obsolete `db_schema/.env` is not
+used by the main application.
 
-Use `python main.py --port 8002` to select another local port.
+## How search works
 
-## Live workflow
+1. Enter `Sector 150 Noida`, a name, builder, registration, `Plot GH-03 Noida`,
+   or `Khasra 123/4 Lucknow`. Indexed searches do not contact RERA or ask for a CAPTCHA.
+2. The database returns possible matches, addresses, matching parcel evidence and
+   the date each source page was inspected. Results are paginated, 100 per page.
+3. Open a project in a new tab. The scraper fetches the official details page
+   immediately and validates its registration. It displays project fields, land
+   records, unit tables and document links, with a fresh retrieval timestamp.
+4. Use **Search RERA live** to check for newer or missing records. This uses RERA's
+   normal CAPTCHA and scans source pages when the query needs address/parcel checks.
+   Matches remain openable while the original tab continues searching.
 
-1. Enter any remembered project name, builder, city, or address with city (for
-   example `Oro City`, `ACE INFRACITY`, or `Sector 150 Noida`). A full RERA
-   registration number or official details URL also works.
-2. For name/registration searches, the application loads a fresh search session
-   from RERA and shows its CAPTCHA. Enter the displayed characters.
-3. Select the intended project from the possible matches. Names and builders
-   use the live source form. City aliases such as Noida map to the official district.
-   Addresses/localities with a recognized city or district check live details in
-   groups of 12, with up to six concurrent lightweight HTTP checks. These read
-   only identity and location fields, including the separate village/sector field,
-   without launching browsers or extracting unit/document tables. Full extraction
-   runs only for a project you open. Matches can be opened in separate tabs
-   immediately while the original tab continues searching. The browser continues automatically until every candidate has been checked,
-   showing accumulated matches and progress without a load-more button. Failed
-   pages get up to three attempts; unresolved failures are labelled incomplete. Results show the address for disambiguation; they are possible
-   matches, not proof that a vague description identifies a unique property.
-   Common locality aliases (such as Gomti Nagar and Indirapuram) also work.
-   For an unrecognized locality, include its city. Search coverage depends on
-   what RERA publishes; landmark proximity/geocoding is not available.
-4. The scraper resolves the internal project ID from that live source response
-   and fetches the selected project's details immediately.
-5. The page displays the extracted fields, documents, land/deed records, plan/unit
-   records, official source URL, and retrieval time.
+Search is token-based and uses SQL indexes, not a live scan of thousands of pages.
+`Sector 150` does not match `Sector 1500`. `Sec.150` is recognized. Noida and Greater
+Noida map to Gautam Buddha Nagar. Exact parcel matching preserves `/` and `-`:
+`123` does not match `123/4` or `1234`; `GH-03` does not match `GH-030`. Comma-separated
+source identifiers are supported; ranges are not expanded. Indexed matching does
+not perform geocoding, proximity search or fuzzy spelling correction.
 
-A known official `https://up-rera.in/Frm_View_Project_Details.aspx?id=...` URL can
-be fetched directly, without a separate search. Its internal ID must come from
-the source; registration-number digits are **not** a reliable internal ID.
+A city is optional for a **database** parcel search; adding a district/village
+helps distinguish repeated numbers. The live parcel scan still requires a city
+or district to bound its work. RERA sometimes publishes combined khasra/plot
+columns; their labels are retained rather than inventing a more precise type.
 
-Every new search/fetch contacts RERA again. Source errors are shown explicitly;
-there is no fallback to previously saved project data. RERA's CAPTCHA and source
-availability still apply. “Live” means fetched on request, not continuous monitoring.
+Coverage means the projects returned by the public UP-RERA directory at collection
+time, not every land parcel or every historical registration. `/api/catalog/coverage`
+reports directory size, inspected projects, district counts and refresh dates.
+A directory-only project can match its name, builder or district, but its address
+and parcel fields remain unavailable until inspected. Zero matches do not prove
+that a property does not exist. Source failures remain pending for a later retry.
 
-## Search by plot or khasra number
+## Database and refresh
 
-Enter a labelled identifier with its city or district, for example:
+The same search schema works locally with SQLite and online with Neon PostgreSQL.
+These tables are separate from the older `projects`/agent tables:
 
-- `Khasra 123/4 Lucknow`
-- `Plot GH-03 Noida`
-- `Plot No. 23 Sector 150 Noida`
+| Table | Contents |
+| --- | --- |
+| `rera_search_projects` | Registration, project name, promoter, district, tehsil, address, locality, sectors, project type, official URL, directory timestamp, source-check timestamp and original parcel evidence |
+| `rera_search_tokens` | Indexed search tokens linked to registration numbers |
+| `rera_search_parcels` | Separate `kind` (`plot`/`khasra`), exact identifier and registration columns |
+| `rera_search_metadata` | Directory provenance and index build dates |
 
-The same `/api/live/search` endpoint and CAPTCHA workflow support these inputs
-locally and on Vercel. A city/district is required because parcel numbers repeat
-across locations. Additional locality words narrow matches against the published
-project address/locality. Bare numbers are not a dedicated parcel lookup; use
-`Plot` or `Khasra` explicitly.
+The schema is idempotent. No existing legacy tables are dropped or modified.
+A summary-only or older import cannot overwrite newer inspected fields. Normal
+public API requests only read the database; imports run through local maintenance
+commands, outside Vercel's request time limit.
 
-After the CAPTCHA, the scraper checks the projects returned by RERA for the
-chosen district in batches of 12, with up to six concurrent HTTP checks. It reads
-identifier columns in old/new land tables and explicitly labelled plot-number
-columns, including collapsed tables. Plot queries can also match an explicitly
-labelled plot number in the project address. Parcel identifiers are matched
-exactly (ignoring case and spaces around `/` and `-`): `123` does not match
-`1234` or `123/4`, and `GH-03` does not match `GH-030`. Comma-separated identifiers
-in a source cell are supported; ranges are not expanded.
+Collect a fresh all-UP directory through the official search form and its CAPTCHA:
 
-Candidates show the matched published identifier and its source. Open a
-project in a new tab to fetch its complete details afresh while the original
-tab continues searching. Each project tab has its own request state; opening a
-match does not consume, cancel or rewind the ongoing search. Keep the search
-tab open until the scan finishes. A match identifies a possible RERA
-project, not an independently verified land parcel or proof of ownership. Some
-RERA columns combine khasra/plot identifiers without distinguishing their type.
-Coverage is limited to published RERA projects and supported table/address
-fields, not all Bhulekh land records; missing or differently formatted source
-records may not match. Source failures are retried and labelled incomplete as in
-address searches. No land dataset or result cache is persisted.
+```bash
+python -m scripts.collect_search_directory
+```
 
-## Storage behavior
+Then inspect the official project links and build the local database:
 
-- Returned project records remain in the user's browser until the page is closed
-  or replaced. **Download this result** explicitly exports the current JSON.
-- Search sessions hold cookies, form state, candidate summaries and scan position in server memory
-  only. They are removed after completion/cancellation or expire after 10 minutes.
-- The server holds at most eight active searches and four concurrent full detail fetches, plus at most six lightweight address checks.
-- API responses use `Cache-Control: no-store`.
-- Linked PDFs/images are not downloaded in bulk. A document opens from the source
-  only when selected. Document OCR is a separate, older component.
-- `data/results/` and PostgreSQL are not read or written by the live application.
+```bash
+python -m scripts.refresh_search_catalog --workers 6
+python -m scripts.build_search_catalog
+```
+
+The refresh writes atomic per-project checkpoints in `data/search_catalog/` and
+resumes after interruptions. It skips pages checked in the last seven days by
+default; use `--max-age-hours 0` to force a refresh. Failed pages are tried three
+times, reported in `_refresh_report.json`, and retried on the next run. At most
+six concurrent source requests are used. These jobs can take substantial time;
+user searches query their completed index instead of waiting for the job.
+
+Publish the completed local index to the configured Neon database:
+
+```bash
+python -m scripts.build_search_catalog --publish
+```
+
+Publishing uses PostgreSQL COPY in one transaction. Existing readers see the
+previous index until commit; a failed upload rolls back. It replaces only the
+four search tables above. The local SQLite database and source checkpoints stay
+outside Git. Recollect the directory periodically to discover new registrations;
+refreshing known links alone cannot discover newly listed projects.
 
 ## API
 
-Interactive documentation: **http://127.0.0.1:8000/docs**.
+`POST /api/live/search` with `{"query":"Sector 150 Noida"}` returns database
+matches when configured: `status: "select_project"`, `source: "database"`, `total`,
+`projects`, `coverage`, `elapsed_ms` and `next_offset`. Send `offset` for another
+page. The historical endpoint name is retained for client compatibility.
 
-Start a fresh lookup:
+Use `{"query":"Sector 150 Noida", "live":true}` for the source/CAPTCHA flow.
+An official `https://up-rera.in/Frm_View_Project_Details.aspx?id=...` URL always
+fetches live. Internal IDs come from RERA's response; registration digits are
+**not** reliable internal project IDs.
 
-```http
-POST /api/live/search
-Content-Type: application/json
+Live continuation endpoints:
 
-{"query":"UPRERAPRJ248777/03/2025"}
-```
+- `POST /api/live/search/{session_id}/captcha` with `captcha`.
+- `POST /api/live/search/{session_id}/refresh-captcha`.
+- `POST /api/live/search/{session_id}/more` for the next scan batch.
+- `POST /api/live/search/{session_id}/project` with `registration_number`.
+- `DELETE /api/live/search/{session_id}` to discard a search.
 
-The response is `captcha_required` with a `session_id` and a CAPTCHA data URL.
-Submit that CAPTCHA to the same running API instance:
+`GET /health` reports configured mode; `GET /api/catalog/coverage` checks the
+catalog. Interactive API documentation is at `/docs`. Database errors produce an
+explicit 503 and the UI retains the live-search option. They do not silently start
+a lengthy source scan. Full detail source errors are explicit; cached data is not
+labelled live or silently substituted.
 
-```http
-POST /api/live/search/{session_id}/captcha
-Content-Type: application/json
+## Vercel
 
-{"captcha":"THE_DISPLAYED_CHARACTERS"}
-```
+`vercel.json` deploys FastAPI from `main.py` in Mumbai with a 300-second request
+limit. Configure Neon `DATABASE_URL` and `RERA_SESSION_KEY` in Vercel before deploying.
+The Neon Marketplace integration can supply the database variables automatically.
+Use a pooled TLS URL. Never copy production credentials into frontend code.
 
-A unique match returns `complete` and a fresh `result`. Multiple matches return
-`select_project` and the candidates; choose one with:
+The hosted app extracts server-rendered pages over HTTP and does not launch
+Chromium. CAPTCHA state is compressed and encrypted with the Fernet session key,
+returned as `session_state`, and supplied with continuation requests. Sessions
+expire after ten minutes. Local development uses one worker with in-memory state.
+Responses use `Cache-Control: no-store`; the search index itself is persistent.
+Documents/PDFs are fetched from RERA only when opened, not bulk-downloaded.
 
-```http
-POST /api/live/search/{session_id}/project
-Content-Type: application/json
-
-{"registration_number":"UPRERAPRJ248777/03/2025"}
-```
-
-Other endpoints:
-
-- `POST /api/live/search/{session_id}/refresh-captcha` — refresh the source challenge.
-- `DELETE /api/live/search/{session_id}` — cancel a pending search.
-- `GET /health` — reports live mode, supported sources, and no database requirement.
-
-Returned records include `fetch_mode: "live"`, `from_cache: false`,
-`persisted: false`, and `scraped_at`. The existing `property_data` schema is
-retained for downstream consumers. No due-diligence conclusion is generated by
-this scraper interface; it exposes the source records.
-
-Run a single API worker for local in-memory CAPTCHA sessions. The Vercel deployment
-uses encrypted request-carried sessions instead, so requests can reach different instances.
-Additional state RERA portals require their own search/detail adapters; this
-code does not claim all-India coverage yet.
-
-## Implementation
-
-- `main.py` — default launcher for the live application.
-- `src/live_api.py` — request-driven API and session cleanup.
-- `src/live_dashboard.html` — live search, CAPTCHA, candidate selection, result/export UI.
-- `src/scraper/live.py` — fresh source search and per-project fetch; no database/cache access.
-- `src/scraper/project_links.py` — authoritative internal ID resolution from RERA ViewState.
-- `src/scraper/detail_page.py` — live page loading and response validation.
-- `src/scraper/project_details_extractor.py` — structured extraction, including collapsed tables.
-- `src/scraper/validation.py` — project identity/basic-data validation.
-
-## Tests
+## Verification and code
 
 ```bash
-.venv/bin/python -m pip install pytest
-.venv/bin/python -m pytest tests -q
+python -m pip install pytest
+python -m pytest tests -q
 ```
 
-The automated tests use synthetic source responses and local HTML; they do not
-need live RERA access, CAPTCHA answers, PostgreSQL, or LLM credentials. They cover
-correct internal IDs, new-format registrations, extraction, live request/session
-lifecycle, repeated fresh fetches, no disk persistence, and no stale-data fallback.
+Tests use local fixtures; they cover authoritative ID mapping, exact identifiers,
+sector boundaries, coverage/paging, invalid imports, query safety, index failure,
+CAPTCHA continuation and opening independent project tabs during a search.
 
-## Legacy components
-
-The earlier batch/database pipeline remains available as an optional utility;
-**the main live application does not call it**:
-
-- `main_district.py` and `scrape_details_parallel.py`: explicitly requested district
-  collection/export, including resumable `--refresh-outdated` and `--search-html` repair.
-- `db_schema/db/` and `db_schema/scripts/`: optional PostgreSQL loading/export tools.
-- `db_schema/api/` and `db_schema/agents/`: the older database-oriented data and
-  due-diligence services. These agents have not been converted to live-only analysis.
-- `data/results/`: the historical district dataset; unused by live search.
-- `backups/`: pre-repair copies retained locally.
-
-The October 2026 scraper repair corrected guessed project IDs, empty successes,
-failed-file resume behavior, repeated nested tables, and missing collapsed fields.
-Those extraction and identity fixes are shared by the live and optional batch paths.
-
-Automatic address search continuation (internal browser API): `POST /api/live/search/{session_id}/more`.
-No full district detail dataset is downloaded or retained. Failed address checks
-are retried automatically, up to three attempts and are never reported as definitive non-matches.
-
-
-## Vercel deployment
-
-`vercel.json` configures the FastAPI entrypoint in `main.py`, the Mumbai region,
-and a 300-second per-request limit. The browser automatically continues bounded
-address scans across requests; it must remain open during the search.
-
-Set `RERA_SESSION_KEY` to a Fernet key in Vercel environment settings before
-building. Generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
-Never commit this key. Changing it invalidates active searches.
-
-The hosted app uses direct HTTP extraction of server-rendered pages, with the
-same structured extractor and identity validation as the local browser path.
-It does not install or launch Chromium. CAPTCHA/session cookies, source form
-fields, candidates and scan progress are compressed and encrypted into an opaque
-`session_state` response field. The browser returns this field in each continuation
-request. It stays only in browser memory and expires after ten minutes of inactivity;
-no project database or persistent cache is used. Treat this token as a temporary
-search credential. Cancellation drops it from the browser; no server-side revocation
-store is maintained, and copies expire automatically.
-
-Source failures, CAPTCHA restrictions and RERA response times still apply.
-No data files, backups, local credentials or legacy database services are bundled
-into the Vercel app. `.vercelignore` controls the deployment package.
-
-Hosted-session and HTTP extraction checks are included in `tests/test_hosted.py`.
+- `src/search_catalog.py`: schema, normalization, ingestion and indexed queries.
+- `src/live_api.py`, `src/live_dashboard.html`: API and search/detail UI.
+- `src/scraper/live.py`: live searches, identity validation, fast location/parcel parsing.
+- `scripts/`: collect, resume, build and publish the search catalog.
+- `db_schema/agents/`: older agent services, not part of this search application.
+  Their generated findings are not imported into the official-source search index.

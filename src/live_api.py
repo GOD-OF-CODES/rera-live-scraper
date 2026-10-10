@@ -1,5 +1,6 @@
-"""Local live-scraping API. Start with python main.py; PostgreSQL is not used."""
+"""Indexed project discovery with on-demand, verified live RERA details."""
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -10,10 +11,13 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from src.scraper.live import LiveScraper, LiveScrapeError
+from src.search_catalog import configured_catalog
 
 
 class SearchInput(BaseModel):
     query: str = Field(min_length=3, max_length=300)
+    live: bool = False
+    offset: int = Field(default=0, ge=0, le=100000)
 
 
 class StateInput(BaseModel):
@@ -28,8 +32,9 @@ class ProjectInput(StateInput):
     registration_number: str = Field(min_length=1, max_length=60)
 
 
-def create_app(scraper=None):
+def create_app(scraper=None, catalog=None):
     live = scraper or LiveScraper()
+    catalog = catalog if catalog is not None else (configured_catalog() if scraper is None else None)
     hosted = None
     if os.environ.get("VERCEL") or os.environ.get("RERA_STATELESS"):
         from src.scraper.hosted_sessions import HostedSessions
@@ -56,8 +61,8 @@ def create_app(scraper=None):
             await task
         live.close()
 
-    app = FastAPI(title="Live UP-RERA Scraper", version="2.0.0", lifespan=lifespan,
-                  description="Fetch a requested project directly from RERA. No database or stored-project fallback.")
+    app = FastAPI(title="UP-RERA Project Search", version="3.0.0", lifespan=lifespan,
+                  description="Search indexed RERA locations and parcels, then fetch current project details.")
     app.state.live_scraper = live
 
     @app.middleware("http")
@@ -88,11 +93,29 @@ def create_app(scraper=None):
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "mode": "live", "database_required": False,
-                "persistent_cache": False, "supported_sources": ["UP-RERA"]}
+        return {"status": "ok", "mode": "indexed+live" if catalog else "live", "database_required": False,
+                "persistent_cache": bool(catalog), "supported_sources": ["UP-RERA"]}
+
+    @app.get('/api/catalog/coverage')
+    def coverage():
+        if not catalog:
+            return {'status': 'unavailable', 'projects': 0, 'inspected': 0}
+        try:
+            return catalog.coverage()
+        except Exception:
+            raise LiveScrapeError('The search database is temporarily unavailable. Live search is still available.',
+                                 'database_unavailable', 503)
 
     @app.post("/api/live/search")
     def search(body: SearchInput):
+        if catalog and not body.live and not body.query.lower().startswith(('http:', 'https:')):
+            try:
+                return catalog.search(body.query, offset=body.offset)
+            except Exception as exc:
+                # Do not include DB exceptions/connection strings in public responses or logs.
+                logging.getLogger(__name__).warning('Catalog lookup failed (%s)', type(exc).__name__)
+                raise LiveScrapeError('The search database is temporarily unavailable. Use Search RERA live below.',
+                                     'database_unavailable', 503) from None
         return execute('start', body.query)
 
     @app.post("/api/live/search/{session_id}/captcha")

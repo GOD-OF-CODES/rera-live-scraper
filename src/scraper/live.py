@@ -161,10 +161,11 @@ def fetch_project_http(details_url, registration_number=None, summary=None):
             "search_result": summary or {}, "property_data": data}
 
 
-def fetch_search_fields(details_url, registration_number, summary=None):
+def fetch_search_fields(details_url, registration_number, summary=None, *, session=None):
     """Read location fields and, for parcel queries, identifier columns over HTTP."""
     url = official_detail_url(details_url)
-    with requests.get(url, timeout=(10, 30)) as response:
+    http = session or requests
+    with http.get(url, timeout=(10, 30)) as response:
         response.raise_for_status()
         if official_detail_url(response.url) != url:
             raise LiveScrapeError("RERA redirected the address check to another project.")
@@ -173,18 +174,18 @@ def fetch_search_fields(details_url, registration_number, summary=None):
 
 
 def parse_search_fields(html, registration_number, include_parcels=False):
-    ids = {"lblProjectNameWithID", "lblProjectName", "projetaddress", "lblVillage", "ddlDistrict"}
-    soup = BeautifulSoup(html, "html.parser", parse_only=SoupStrainer(
-        id=lambda value: value and value.removeprefix("ctl00_ContentPlaceHolder1_") in ids))
+    from lxml import html as html_parser
+    root = html_parser.fromstring(html)
 
     def value(suffix):
-        element = soup.find(id="ctl00_ContentPlaceHolder1_" + suffix)
-        if element is None:
-            return ""
-        if element.name == "select":
-            element = element.find("option", selected=True) or element.find("option")
-            return element.get_text(" ", strip=True) if element else ""
-        return element.get("value", element.get_text(" ", strip=True)).strip()
+        elements = root.xpath('//*[@id=$id]', id='ctl00_ContentPlaceHolder1_' + suffix)
+        if not elements:
+            return ''
+        element = elements[0]
+        if element.tag == 'select':
+            options = element.xpath('./option[@selected]') or element.xpath('./option')
+            return options[0].text_content().strip() if options else ''
+        return element.get('value', element.text_content()).strip()
 
     identity = re.search(r"Project Id\s*:\s*\(([^)]+)\)", value("lblProjectNameWithID"), re.I)
     if not identity or normalize_registration(identity[1]) != normalize_registration(registration_number) or not value("lblProjectName"):
@@ -193,42 +194,44 @@ def parse_search_fields(html, registration_number, include_parcels=False):
         "address": value("projetaddress"), "village_locality_sector": value("lblVillage"),
         "district": value("ddlDistrict"),
     }}}
+    if value('ddlTehsil'):
+        result['property_data']['basic_details']['tehsil'] = value('ddlTehsil')
     if include_parcels:
-        result['property_data']['search_parcels'] = parse_parcel_tables(html)
+        result['property_data']['search_parcels'] = parse_parcel_tables(html, root=root)
     return result
 
 
-def parse_parcel_tables(html):
-    """Read identifier columns only, including collapsed old/new RERA tables."""
-    soup = BeautifulSoup(html, 'html.parser', parse_only=SoupStrainer('table'))
+def parse_parcel_tables(html, root=None):
+    """Read only published identifier columns, preserving type and compound IDs."""
+    from lxml import html as html_parser
+    root = root if root is not None else html_parser.fromstring(html)
     records = []
-    for table in soup.find_all('table'):
-        if table.find('table'):
+    for table in root.iter('table'):
+        if table.xpath('.//table'):
             continue
-        columns = {}
-        width = 0
-        type_column = None
-        for row in table.find_all('tr'):
-            cells = row.find_all(['td', 'th'], recursive=False)
-            values = [cell.get_text(' ', strip=True) for cell in cells]
+        # Large unit inventories are irrelevant to a parcel lookup. Inspect
+        # their headings before walking thousands of apartment rows.
+        heading_cells = table.xpath('./tr[1]/* | ./thead/tr[1]/* | ./tbody/tr[1]/*')
+        if not any(re.search(r'\b(?:khasra|plot)\b', cell.text_content(), re.I)
+                   for cell in heading_cells):
+            continue
+        columns, width, type_column = {}, 0, None
+        for row in table.iter('tr'):
+            cells = [cell for cell in row if cell.tag in {'td', 'th'}]
+            values = [' '.join(cell.text_content().split()) for cell in cells]
             headers = {}
             for index, value in enumerate(values):
                 label = re.sub(r'[^a-z]+', ' ', value.lower()).strip()
                 if re.fullmatch(r'(?:khasra(?: plot)?|plot|villa plot) (?:no|number|nos|numbers)', label):
-                    kinds = [kind for kind in ('khasra', 'plot') if kind in label]
-                    headers[index] = (kinds, value)
+                    headers[index] = ([kind for kind in ('khasra', 'plot') if kind in label], value)
             if headers:
-                columns = headers
-                width = len(values)
-                type_column = next((i for i, value in enumerate(values)
-                                    if value.strip().lower() == 'type'), None)
+                columns, width = headers, len(values)
+                type_column = next((i for i, v in enumerate(values) if v.lower() == 'type'), None)
                 continue
             if len(values) != width or any(cell.get('colspan', '1') != '1' for cell in cells):
                 continue
             for index, (kinds, label) in columns.items():
                 if index < len(values) and values[index]:
-                    # Modern pages use a Khasra No column for both kinds and
-                    # distinguish Plot records in a separate Type column.
                     record_type = values[type_column].lower() if type_column is not None else ''
                     record_kinds = [record_type] if record_type in ('plot', 'khasra') else kinds
                     records.append({'number': values[index], 'kinds': record_kinds,
