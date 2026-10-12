@@ -1,10 +1,10 @@
-"""Start the live, request-driven RERA scraper. No database setup is needed."""
+"""Start the UP-RERA app with indexed search and live project details."""
 import argparse
 from src.live_api import app  # ASGI entrypoint for Vercel
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the live UP-RERA scraper (no database).")
+    parser = argparse.ArgumentParser(description="Run the UP-RERA search and live scraper.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=8000, type=int)
     args = parser.parse_args()

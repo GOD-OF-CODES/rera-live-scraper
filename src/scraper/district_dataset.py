@@ -152,9 +152,7 @@ def save_project_json(
     """
     Save one project's JSON.
 
-    Uses the SAME structure main.py produces, so this file can be
-    inserted with db_schema/scripts/insert_json.py exactly like a
-    single-project scrape.
+    Preserve the structured project result for later inspection or export.
     """
 
     output_file = project_json_path(
@@ -229,9 +227,7 @@ def build_result(
     structured_data: dict
 ) -> dict:
     """
-    Build the same result shape main.py writes for a single
-    project, so district JSON files stay compatible with
-    db_schema/scripts/insert_json.py.
+    Build a validated structured project result for district JSON exports.
     """
 
     validate_property_data(structured_data, registration_number)

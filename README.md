@@ -19,8 +19,8 @@ Open http://127.0.0.1:8000. Use `python main.py --port 8002` for another port.
 Set `RERA_DATABASE_URL` (or `DATABASE_URL`) in the ignored `.env.local` to use Neon.
 Use a pooled PostgreSQL connection URL with TLS. If no URL is configured, the app
 uses `data/rera_search.sqlite` when present; otherwise it supports live search only.
-Do not put credentials in Git or the browser. The obsolete `db_schema/.env` is not
-used by the main application.
+Do not put credentials in Git or the browser. Database credentials are configured
+locally in `.env.local` and in Vercel environment variables for deployments.
 
 ## How search works
 
@@ -57,7 +57,7 @@ that a property does not exist. Source failures remain pending for a later retry
 ## Database and refresh
 
 The same search schema works locally with SQLite and online with Neon PostgreSQL.
-These tables are separate from the older `projects`/agent tables:
+The application uses these search tables:
 
 | Table | Contents |
 | --- | --- |
@@ -76,7 +76,7 @@ FROM rera_search_catalog
 WHERE district = 'Gautam Buddha Nagar';
 ```
 
-The schema is idempotent. No existing legacy tables are dropped or modified.
+The schema is idempotent. Unrelated database tables are not dropped or modified.
 A summary-only or older import cannot overwrite newer inspected fields. Normal
 public API requests only read the database; imports run through local maintenance
 commands, outside Vercel's request time limit.
@@ -178,5 +178,3 @@ CAPTCHA continuation and opening independent project tabs during a search.
 - `src/live_api.py`, `src/live_dashboard.html`: API and search/detail UI.
 - `src/scraper/live.py`: live searches, identity validation, fast location/parcel parsing.
 - `scripts/`: collect, resume, build and publish the search catalog.
-- `db_schema/agents/`: older agent services, not part of this search application.
-  Their generated findings are not imported into the official-source search index.
