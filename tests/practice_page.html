@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>RERA Property Search</title>
+</head>
+
+<body>
+
+    <h1>RERA Property Search</h1>
+
+    <label for="registrationNumber">
+        RERA Registration Number:
+    </label>
+
+    <input
+        id="registrationNumber"
+        type="text"
+        placeholder="Enter RERA Number"
+    >
+
+    <button id="searchButton">
+        Search
+    </button>
+
+    <hr>
+
+    <div id="result"></div>
+
+
+    <script>
+
+        document.getElementById("searchButton").onclick = function () {
+
+            const reraNumber =
+                document.getElementById("registrationNumber").value;
+
+            // Show loading message
+            document.getElementById("result").innerHTML =
+                "<p>Searching...</p>";
+
+
+            // Simulate server/database delay
+            setTimeout(function () {
+
+                document.getElementById("result").innerHTML = `
+
+                    <h2 id="projectName">
+                        ABC Residency
+                    </h2>
+
+                    <p id="promoterName">
+                        Promoter: XYZ Developers Pvt Ltd
+                    </p>
+
+                    <p id="location">
+                        Location: Gautam Buddha Nagar, Uttar Pradesh
+                    </p>
+
+                    <p id="status">
+                        Status: Ongoing
+                    </p>
+
+                    <p id="registration">
+                        Registration Number: ${reraNumber}
+                    </p>
+
+                `;
+
+            }, 3000);
+
+        };
+
+    </script>
+
+</body>
+
+</html>

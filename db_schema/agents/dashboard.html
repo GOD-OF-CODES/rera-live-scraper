@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Property Due Diligence - Live Agent Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0b0f17;
+      --bg-secondary: #111827;
+      --bg-card: #1a2234;
+      --bg-card-hover: #212c42;
+      --border-color: #26334d;
+      --accent-blue: #3b82f6;
+      --accent-blue-glow: rgba(59, 130, 246, 0.25);
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #3b82f6, #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: white;
+      font-size: 18px;
+      box-shadow: 0 0 15px var(--accent-blue-glow);
+    }
+    .brand-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+    .brand-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .header-links {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+    .nav-btn {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      transition: all 0.2s;
+    }
+    .nav-btn:hover {
+      color: white;
+      background: var(--bg-card);
+      border-color: var(--accent-blue);
+    }
+
+    main {
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 32px 24px;
+      flex: 1;
+    }
+
+    .hero-banner {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .hero-title {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #ffffff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-subtitle {
+      font-size: 15px;
+      color: var(--text-secondary);
+      max-width: 650px;
+      margin: 0 auto;
+    }
+
+    .search-panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+      margin-bottom: 32px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .search-input {
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 14px 18px;
+      color: white;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .search-input:focus {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 3px var(--accent-blue-glow);
+    }
+    .search-btn {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 28px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 15px var(--accent-blue-glow);
+    }
+    .search-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+    }
+    .search-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .options-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .quick-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .tag-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .tag-btn:hover {
+      color: white;
+      border-color: var(--accent-blue);
+      background: var(--bg-card-hover);
+    }
+
+    .agents-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    .agent-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: all 0.2s;
+    }
+    .agent-card:hover {
+      border-color: #334366;
+      transform: translateY(-2px);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .icon-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .icon-emerald { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .icon-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+    .icon-rose { background: rgba(244, 63, 94, 0.15); color: #fb7185; }
+    .icon-indigo { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .status-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .status-idle { background: var(--bg-card); color: var(--text-muted); }
+    .status-running { background: rgba(59, 130, 246, 0.2); color: #60a5fa; animation: pulse 1.5s infinite; }
+    .status-ok { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .status-warn { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .card-body {
+      flex: 1;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .data-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .data-item {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      padding-bottom: 6px;
+    }
+    .data-label {
+      color: var(--text-secondary);
+    }
+    .data-value {
+      font-weight: 500;
+      color: white;
+      text-align: right;
+      max-width: 60%;
+      word-break: break-word;
+    }
+
+    .empty-hint {
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 12px;
+      text-align: center;
+      padding: 24px 0;
+    }
+
+    .raw-view {
+      margin-top: 24px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .raw-view-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #94a3b8;
+      background: var(--bg-primary);
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      max-height: 350px;
+    }
+
+    footer {
+      border-top: 1px solid var(--border-color);
+      padding: 20px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">AI</div>
+      <div>
+        <div class="brand-title">AI Property Due Diligence</div>
+        <div class="brand-subtitle">Multi-Agent Intelligence Network (UP-RERA & Revenue Records)</div>
+      </div>
+    </div>
+    <div class="header-links">
+      <a href="/docs" target="_blank" class="nav-btn">Interactive Swagger Docs</a>
+      <a href="/health" target="_blank" class="nav-btn">API Health</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero-banner">
+      <h1 class="hero-title">Live Agent Due Diligence Console</h1>
+      <p class="hero-subtitle">
+        Enter any property address, plot, survey/khasra number, developer/promoter name, or UP-RERA registration number to run the subagents live.
+      </p>
+    </div>
+
+    <div class="search-panel">
+      <div class="input-row">
+        <input 
+          type="text" 
+          id="propertyQuery" 
+          class="search-input" 
+          placeholder="e.g. '3534 GH-FTSNO-3456', 'Assotech Realty Private Limited', 'SD 23 sector 45', or 'UPRERAPRJ631'" 
+          value="3534 GH-FTSNO-3456"
+        />
+        <button id="runBtn" class="search-btn" onclick="runLiveDueDiligence()">
+          <span>Run Live Agents</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
+
+      <div class="options-row">
+        <div class="quick-tags">
+          <span>Try quick queries:</span>
+          <button class="tag-btn" onclick="setQuery('3534 GH-FTSNO-3456')">Khasra 3534 GH-FTSNO-3456</button>
+          <button class="tag-btn" onclick="setQuery('Assotech Realty Private Limited')">Assotech Realty</button>
+          <button class="tag-btn" onclick="setQuery('SD 23 sector 45')">Plot SD 23, Sector 45</button>
+          <button class="tag-btn" onclick="setQuery('UPRERAPRJ631')">ATS Picturesque (PRJ631)</button>
+          <button class="tag-btn" onclick="setQuery('UPRERAPRJ10006')">BHS-14 GNIDA (PRJ10006)</button>
+        </div>
+        <div id="runtimeStatus">Status: Ready</div>
+      </div>
+    </div>
+
+    <div class="agents-grid">
+      <!-- 1. Property Identification Subagent -->
+      <div class="agent-card">
+        <div class="card-header">
+          <div class="card-title-wrap">
+            <div class="card-icon icon-blue">🏢</div>
+            <div class="card-title">Property Identification</div>
+          </div>
+          <span id="badge-prop" class="status-badge status-idle">IDLE</span>
+        </div>
+        <div class="card-body">
+          <div id="content-prop" class="empty-hint">Enter query and click 'Run Live Agents'</div>
+        </div>
+      </div>
+
+      <!-- 2. Ownership & Title Subagent -->
+      <div class="agent-card">
+        <div class="card-header">
+          <div class="card-title-wrap">
+            <div class="card-icon icon-indigo">📜</div>
+            <div class="card-title">Ownership & Title</div>
+          </div>
+          <span id="badge-owner" class="status-badge status-idle">IDLE</span>
+        </div>
+        <div class="card-body">
+          <div id="content-owner" class="empty-hint">Awaiting property identification</div>
+        </div>
+      </div>
+
+      <!-- 3. Land Records & Land Use Subagent -->
+      <div class="agent-card">
+        <div class="card-header">
+          <div class="card-title-wrap">
+            <div class="card-icon icon-emerald">🌾</div>
+            <div class="card-title">Land Records & Land Use</div>
+          </div>
+          <span id="badge-land" class="status-badge status-idle">IDLE</span>
+        </div>
+        <div class="card-body">
+          <div id="content-land" class="empty-hint">Awaiting property identification</div>
+        </div>
+      </div>
+
+      <!-- 4. Registration & Encumbrance Subagent -->
+      <div class="agent-card">
+        <div class="card-header">
+          <div class="card-title-wrap">
+            <div class="card-icon icon-amber">⚖️</div>
+            <div class="card-title">Registration & Encumbrance</div>
+          </div>
+          <span id="badge-enc" class="status-badge status-idle">IDLE</span>
+        </div>
+        <div class="card-body">
+          <div id="content-enc" class="empty-hint">Awaiting property identification</div>
+        </div>
+      </div>
+
+      <!-- 5. Project & Regulatory Compliance Subagent -->
+      <div class="agent-card">
+        <div class="card-header">
+          <div class="card-title-wrap">
+            <div class="card-icon icon-rose">🏛️</div>
+            <div class="card-title">Regulatory Compliance</div>
+          </div>
+          <span id="badge-reg" class="status-badge status-idle">IDLE</span>
+        </div>
+        <div class="card-body">
+          <div id="content-reg" class="empty-hint">Awaiting property identification</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="raw-view">
+      <div class="raw-view-header">
+        <span>Live Structured Output (JSON)</span>
+        <span id="rawTimestamp" style="color: var(--text-muted); font-size: 12px;"></span>
+      </div>
+      <pre id="rawJson">{ "status": "idle", "message": "Submit a query to inspect live subagent responses." }</pre>
+    </div>
+  </main>
+
+  <footer>
+    UP-RERA AI Due Diligence System &bull; Multi-Subagent Coordination Layer &bull; Local PostgreSQL Database Connected
+  </footer>
+
+  <script>
+    function setQuery(q) {
+      document.getElementById('propertyQuery').value = q;
+      runLiveDueDiligence();
+    }
+
+    async function runLiveDueDiligence() {
+      const query = document.getElementById('propertyQuery').value.trim();
+      if (!query) return;
+
+      const runBtn = document.getElementById('runBtn');
+      const statusText = document.getElementById('runtimeStatus');
+
+      runBtn.disabled = true;
+      runBtn.innerHTML = '<span>Executing Agents...</span>';
+      statusText.innerText = 'Status: Querying subagents in PostgreSQL...';
+
+      // Set badges to running
+      ['prop', 'owner', 'land', 'enc', 'reg'].forEach(b => {
+        const el = document.getElementById('badge-' + b);
+        if (el) {
+          el.className = 'status-badge status-running';
+          el.innerText = 'RUNNING';
+        }
+      });
+
+      try {
+        // 1. Call Property Identification Subagent
+        const propResp = await fetch('/agents/property-identification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ raw_query: query })
+        });
+
+        if (!propResp.ok) throw new Error(`Property ID failed: ${propResp.statusText}`);
+        const propData = await propResp.json();
+
+        renderPropertyIdentification(propData);
+
+        // Prepare dynamic context for downstream subagents
+        const regNo = propData.identifiers?.registration_number;
+        const projId = propData.project_id;
+        const khasraNo = propData.identifiers?.khasra_number;
+        const plotNo = propData.identifiers?.plot_number;
+        const district = propData.location?.district;
+        const address = propData.location?.address;
+        const projName = propData.identifiers?.project_name;
+        const promoterName = propData.identifiers?.promoter_name;
+
+        const commonPayload = {
+          project_id: projId || null,
+          registration_number: regNo || null,
+          query: query,
+          raw_query: query,
+          address: address || query,
+          plot_number: plotNo || null,
+          khasra_number: khasraNo || null,
+          project_name: projName || null,
+          promoter_name: promoterName || null,
+          district_hint: district || null
+        };
+
+        // Run remaining 4 subagents in parallel with full dynamic context
+        const ownerPromise = fetch('/agents/ownership-title', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(commonPayload)
+        }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+        const landPromise = fetch('/agents/land-records-land-use', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(commonPayload)
+        }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+        const encPromise = fetch('/agents/registration-encumbrance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(commonPayload)
+        }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+        const regPromise = fetch('/agents/project-regulatory-compliance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(commonPayload)
+        }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+        const [ownerData, landData, encData, regData] = await Promise.all([ownerPromise, landPromise, encPromise, regPromise]);
+
+        if (ownerData) renderOwnershipTitle(ownerData);
+        else document.getElementById('badge-owner').className = 'status-badge status-idle';
+
+        if (landData) renderLandRecords(landData);
+        else document.getElementById('badge-land').className = 'status-badge status-idle';
+
+        if (encData) renderEncumbrance(encData);
+        else document.getElementById('badge-enc').className = 'status-badge status-idle';
+
+        if (regData) renderCompliance(regData);
+        else document.getElementById('badge-reg').className = 'status-badge status-idle';
+
+        // Update JSON view
+        document.getElementById('rawJson').innerText = JSON.stringify({
+          query: query,
+          property_identification: propData,
+          ownership_title: ownerData,
+          land_records_land_use: landData,
+          registration_encumbrance: encData,
+          project_regulatory_compliance: regData
+        }, null, 2);
+
+        document.getElementById('rawTimestamp').innerText = 'Completed at ' + new Date().toLocaleTimeString();
+        statusText.innerText = 'Status: All subagents completed successfully';
+      } catch (err) {
+        console.error(err);
+        statusText.innerText = 'Error: ' + err.message;
+        ['prop', 'owner', 'land', 'enc', 'reg'].forEach(b => {
+          const el = document.getElementById('badge-' + b);
+          if (el) {
+            el.className = 'status-badge status-warn';
+            el.innerText = 'FAILED';
+          }
+        });
+      } finally {
+        runBtn.disabled = false;
+        runBtn.innerHTML = '<span>Run Live Agents</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+      }
+    }
+
+    function renderPropertyIdentification(data) {
+      const badge = document.getElementById('badge-prop');
+      badge.className = data.match_status === 'not_found' ? 'status-badge status-warn' : 'status-badge status-ok';
+      badge.innerText = (data.match_status || 'OK').replace(/_/g, ' ').toUpperCase();
+
+      const content = document.getElementById('content-prop');
+      const id = data.identifiers || {};
+      const loc = data.location || {};
+
+      content.innerHTML = `
+        <div class="data-list">
+          <div class="data-item"><span class="data-label">Project / Property</span><span class="data-value">${id.project_name || id.property_name_or_number || 'N/A'}</span></div>
+          <div class="data-item"><span class="data-label">Registration No</span><span class="data-value">${id.registration_number || 'None (Independent)'}</span></div>
+          <div class="data-item"><span class="data-label">Promoter / Authority</span><span class="data-value">${id.promoter_name || loc.city_or_authority || 'N/A'}</span></div>
+          <div class="data-item"><span class="data-label">Khasra / Plot</span><span class="data-value">${id.khasra_number || id.plot_number || 'N/A'}</span></div>
+          <div class="data-item"><span class="data-label">Total Land Area</span><span class="data-value">${data.total_area_sq_m ? data.total_area_sq_m.toLocaleString() + ' sq.m' : 'N/A'}</span></div>
+          <div class="data-item"><span class="data-label">Classification</span><span class="data-value">${data.land_classification || 'N/A'}</span></div>
+          <div class="data-item"><span class="data-label">Normalized Location</span><span class="data-value">${loc.address || 'N/A'}</span></div>
+        </div>
+      `;
+    }
+
+    function renderOwnershipTitle(data) {
+      const badge = document.getElementById('badge-owner');
+      const statusStr = (data.match_status || 'OK').replace(/_/g, ' ').toUpperCase();
+      badge.className = (statusStr.includes('PARTIAL') || statusStr.includes('NOT')) ? 'status-badge status-warn' : 'status-badge status-ok';
+      badge.innerText = statusStr;
+
+      const content = document.getElementById('content-owner');
+      const chain = data.ownership_chain || [];
+      const gaps = data.title_gaps || [];
+      const conflicts = data.conflicting_ownership_information || [];
+
+      content.innerHTML = `
+        <div class="data-list">
+          <div class="data-item"><span class="data-label">Current Owner</span><span class="data-value">${data.current_owner || 'N/A'}</span></div>
+          <div class="data-item"><span class="data-label">Root Grantor</span><span class="data-value">${(data.previous_owners || [])[0] || 'State / Authority'}</span></div>
+          <div class="data-item"><span class="data-label">Chain Links</span><span class="data-value">${chain.length} Transfers Reconstructed</span></div>
+          <div class="data-item"><span class="data-label">Title Gaps</span><span class="data-value" style="color: ${gaps.length ? '#fbbf24' : '#34d399'}">${gaps.length ? gaps.length + ' Recorded' : 'None Flagged'}</span></div>
+          <div class="data-item"><span class="data-label">Conflicts</span><span class="data-value" style="color: ${conflicts.length ? '#fb7185' : '#34d399'}">${conflicts.length ? conflicts.length + ' Discrepancies' : 'Zero Conflicts'}</span></div>
+        </div>
+      `;
+    }
+
+    function renderLandRecords(data) {
+      const badge = document.getElementById('badge-land');
+      const statusStr = (data.match_status || 'OK').replace(/_/g, ' ').toUpperCase();
+      badge.className = (statusStr.includes('DISCREPANCY') || statusStr.includes('WARN')) ? 'status-badge status-warn' : 'status-badge status-ok';
+      badge.innerText = statusStr;
+
+      const content = document.getElementById('content-land');
+
+      // Safe extraction of zoning status string
+      let zoningDisplay = 'Conforming Residential / Planned Development';
+      if (data.land_use_zoning_status) {
+        if (typeof data.land_use_zoning_status === 'object') {
+          zoningDisplay = data.land_use_zoning_status.permitted_land_use || data.land_use_zoning_status.master_plan_zone || data.land_use_zoning_status.conversion_status || 'Conforming Use';
+        } else {
+          zoningDisplay = String(data.land_use_zoning_status);
+        }
+      }
+
+      // Safe extraction of restrictions list
+      let restrictionsDisplay = 'None Recorded';
+      if (data.restrictions_permissions && Array.isArray(data.restrictions_permissions) && data.restrictions_permissions.length > 0) {
+        const parts = data.restrictions_permissions.map(r => {
+          if (typeof r === 'object' && r !== null) {
+            return r.category ? r.category.replace(/_/g, ' ') : (r.details || 'Permitted');
+          }
+          return String(r);
+        });
+        restrictionsDisplay = parts.slice(0, 2).join(', ');
+        if (parts.length > 2) {
+          restrictionsDisplay += ` (+${parts.length - 2} more)`;
+        }
+      }
+
+      const discCount = (data.discrepancies || []).length;
+
+      content.innerHTML = `
+        <div class="data-list">
+          <div class="data-item"><span class="data-label">Verified Land Area</span><span class="data-value">${data.verified_land_area_sq_m ? data.verified_land_area_sq_m.toLocaleString() + ' sq.m' : 'N/A'}</span></div>
+          <div class="data-item"><span class="data-label">Classification</span><span class="data-value">${data.land_classification || 'N/A'}</span></div>
+          <div class="data-item"><span class="data-label">Zoning Status</span><span class="data-value">${zoningDisplay}</span></div>
+          <div class="data-item"><span class="data-label">Restrictions</span><span class="data-value">${restrictionsDisplay}</span></div>
+          <div class="data-item"><span class="data-label">Discrepancies</span><span class="data-value" style="color: ${discCount ? '#fb7185' : '#34d399'}">${discCount ? discCount + ' Flagged' : 'Zero Discrepancies'}</span></div>
+        </div>
+      `;
+    }
+
+    function renderEncumbrance(data) {
+      const badge = document.getElementById('badge-enc');
+      const statusStr = (data.match_status || 'OK').replace(/_/g, ' ').toUpperCase();
+      badge.className = statusStr.includes('ENCUMBERED') ? 'status-badge status-warn' : 'status-badge status-ok';
+      badge.innerText = statusStr;
+
+      const content = document.getElementById('content-enc');
+
+      const claims = data.mortgages_liens_charges_attachments || data.encumbrances_and_charges || [];
+      const activeMortgages = claims.filter(c => typeof c === 'object' && c !== null && c.status === 'active' && c.claim_type !== 'clear_declaration' && c.claim_type !== 'court_attachment');
+      const mortgageDisplay = activeMortgages.length 
+        ? `${activeMortgages.length} Active Mortgage / Charge Recorded` 
+        : (claims.some(c => typeof c === 'object' && c.claim_type === 'clear_declaration') ? 'Nil Adverse Encumbrances Declared' : 'None Recorded');
+
+      const encSummary = data.status_summary || (data.encumbrance_free_status ? 'Clear Title / Nil Encumbrances' : 'Active Charge Disclosed');
+
+      content.innerHTML = `
+        <div class="data-list">
+          <div class="data-item"><span class="data-label">Mortgages & Liens</span><span class="data-value" style="color: ${activeMortgages.length ? '#fbbf24' : '#34d399'}">${mortgageDisplay}</span></div>
+          <div class="data-item"><span class="data-label">Transactions Count</span><span class="data-value">${(data.transaction_timeline || []).length}</span></div>
+          <div class="data-item"><span class="data-label">Registered Deeds</span><span class="data-value">${(data.deed_registration_details || []).length ? (data.deed_registration_details || []).length + ' Deeds on Record' : 'None Filed'}</span></div>
+          <div class="data-item"><span class="data-label">Encumbrance Status</span><span class="data-value">${encSummary}</span></div>
+        </div>
+      `;
+    }
+
+    function renderCompliance(data) {
+      const badge = document.getElementById('badge-reg');
+
+      // Clean badge text
+      let badgeText = 'COMPLIANT';
+      if (data.compliance_status) {
+        badgeText = String(data.compliance_status).toUpperCase().replace(/_/g, ' ');
+      } else if (data.project_registration_status && typeof data.project_registration_status === 'object') {
+        badgeText = (data.project_registration_status.status || 'OK').toUpperCase().replace(/_/g, ' ');
+      }
+      badge.className = (badgeText.includes('NON') || badgeText.includes('DISCREPANCY') || badgeText.includes('EXPIRED') || badgeText.includes('PARTIAL')) 
+        ? 'status-badge status-warn' 
+        : 'status-badge status-ok';
+      badge.innerText = badgeText;
+
+      const content = document.getElementById('content-reg');
+
+      // Clean registration status text
+      let regStatusDisplay = 'N/A';
+      if (data.project_registration_status) {
+        if (typeof data.project_registration_status === 'object') {
+          const rawStatus = data.project_registration_status.status || (data.project_registration_status.is_registered ? 'Registered Active' : 'Not Registered');
+          regStatusDisplay = rawStatus.replace(/_/g, ' ').toUpperCase();
+          if (data.project_registration_status.registration_number) {
+            regStatusDisplay += ` (${data.project_registration_status.registration_number})`;
+          }
+        } else {
+          regStatusDisplay = String(data.project_registration_status).replace(/_/g, ' ').toUpperCase();
+        }
+      }
+
+      // Clean promoter info
+      let promoterDisplay = 'N/A';
+      if (data.promoter_details && typeof data.promoter_details === 'object') {
+        const pName = data.promoter_details.name || 'Promoter';
+        const pType = data.promoter_details.promoter_type ? ` (${data.promoter_details.promoter_type})` : '';
+        promoterDisplay = `${pName}${pType}`;
+      }
+
+      const findingsCount = (data.regulatory_findings || []).length;
+      const missingItems = data.discrepancies_and_missing_info || data.missing_information || [];
+      const missingCount = missingItems.length;
+
+      content.innerHTML = `
+        <div class="data-list">
+          <div class="data-item"><span class="data-label">Registration Status</span><span class="data-value">${regStatusDisplay}</span></div>
+          <div class="data-item"><span class="data-label">Promoter Track Record</span><span class="data-value">${promoterDisplay}</span></div>
+          <div class="data-item"><span class="data-label">Regulatory Findings</span><span class="data-value">${findingsCount ? findingsCount + ' Observations' : 'Clean Record'}</span></div>
+          <div class="data-item"><span class="data-label">Missing Records</span><span class="data-value" style="color: ${missingCount ? '#fbbf24' : '#34d399'}">${missingCount ? missingCount + ' Items Flagged' : 'Zero Missing Filings'}</span></div>
+        </div>
+      `;
+    }
+
+    // Auto-run on page load with initial query
+    window.addEventListener('DOMContentLoaded', () => {
+      runLiveDueDiligence();
+    });
+  </script>
+</body>
+</html>

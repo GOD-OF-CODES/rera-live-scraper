@@ -163,6 +163,39 @@ expire after ten minutes. Local development uses one worker with in-memory state
 Responses use `Cache-Control: no-store`; the search index itself is persistent.
 Documents/PDFs are fetched from RERA only when opened, not bulk-downloaded.
 
+## Collaborator database and agent workflow
+
+`db_schema/` is maintained for collaborators. It contains the detailed project
+schema, migrations, JSON loader, backfill commands, API, and agent services. It is
+separate from the website's `rera_search_*` index and excluded from Vercel builds.
+Being unused by the website does **not** make these tools unused by the team.
+
+For the detailed-data import tools:
+
+```bash
+python -m pip install -r db_schema/requirements-db.txt
+cd db_schema
+python -m scripts.insert_json /path/to/full-project-result.json
+# Or import a directory containing full individual project results:
+python -m scripts.backfill_db /path/to/full-project-results
+```
+
+Before importing, configure `DATABASE_URL` in the shell environment or the ignored
+`db_schema/.env` to point to the intended database (including Neon when appropriate).
+These collaborator tools do not automatically load the website's `.env.local`.
+Follow [the database setup and migration instructions](db_schema/README.md) to
+prepare the detailed tables. Do not reinitialize an existing database blindly.
+
+Imports need **full project result JSON**, not the lightweight files in
+`data/search_catalog/`. Restoring the tools does not backfill data or create tables
+automatically. See [the agent documentation](db_schema/agents/README.md) for agent
+setup and dependencies.
+
+When cleaning up this repository, preserve collaborator commands, schema files,
+migrations, loaders, and agent interfaces. Check their workflows and confirm with
+their owners before removing them; website-only tests are not sufficient evidence
+that a module is unused.
+
 ## Verification and code
 
 ```bash

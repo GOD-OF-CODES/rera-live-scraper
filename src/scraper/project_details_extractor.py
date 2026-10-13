@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote, urljoin
 
@@ -206,6 +207,45 @@ class ProjectDetailsExtractor:
     # FORM FIELD EXTRACTION
     # =========================================================
 
+    def _get_control_value(self, element) -> str:
+        """
+        Safely retrieve value from input, textarea or select.
+        """
+
+        try:
+
+            tag = element.evaluate(
+                "(el) => el.tagName.toLowerCase()"
+            )
+
+            if tag == "select":
+
+                selected = element.locator(
+                    "option:checked"
+                )
+
+                if selected.count() > 0:
+
+                    return self.clean_text(
+                        selected.first.inner_text()
+                    )
+
+                return ""
+
+            try:
+                return self.clean_text(
+                    element.input_value()
+                )
+
+            except Exception:
+
+                return self.clean_text(
+                    element.inner_text()
+                )
+
+        except Exception:
+
+            return ""
 
     def extract_form_fields(self) -> List[Dict[str, Any]]:
         """
@@ -763,6 +803,41 @@ class ProjectDetailsExtractor:
             ),
         }
 
+    # =========================================================
+    # TABLE EXTRACTION
+    # =========================================================
+
+    def extract_tables(self) -> List[List[List[str]]]:
+        """
+        Extract leaf data tables, including collapsed sections.
+
+        This is used internally for detecting structured
+        Khasra, registry and document rows.
+
+        Reads from the cached page snapshot (see _get_snapshot)
+        instead of re-scanning every table/row/cell live.
+        """
+
+        all_tables = []
+
+        for raw_rows in self._get_snapshot()["tables"]:
+
+            table_rows = []
+
+            for raw_row in raw_rows:
+
+                values = [
+                    self.clean_text(value)
+                    for value in raw_row
+                ]
+
+                if values:
+                    table_rows.append(values)
+
+            if table_rows:
+                all_tables.append(table_rows)
+
+        return all_tables
 
     # =========================================================
     # DOWNLOAD URL RESOLUTION
@@ -1595,3 +1670,53 @@ class ProjectDetailsExtractor:
         )
 
         return structured
+
+    # =========================================================
+    # RAW PAGE TEXT
+    # =========================================================
+
+    def save_page_text(
+        self,
+        registration_number: str,
+        output_directory: str = "data/raw"
+    ) -> Path:
+        """
+        Save readable page text for debugging.
+
+        This is NOT included in the final JSON.
+        """
+
+        output_dir = Path(
+            output_directory
+        )
+
+        output_dir.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        text = self.page.locator(
+            "body"
+        ).inner_text()
+
+        text = self.clean_text(
+            text
+        )
+
+        file_path = (
+            output_dir
+            / f"{registration_number}_details.txt"
+        )
+
+        file_path.write_text(
+            text,
+            encoding="utf-8"
+        )
+
+        print(
+            "\nReadable page text saved to:"
+        )
+
+        print(file_path)
+
+        return file_path

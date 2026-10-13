@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from urllib.parse import parse_qs, urljoin, urlparse
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, SoupStrainer
 
 from src.scraper.search_intent import interpret, matches, matching_parcels
 from src.scraper.browser import BrowserManager

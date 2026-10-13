@@ -8,7 +8,7 @@ from src.scraper.project_links import (project_ids_from_viewstate, project_ids_f
                                       normalize_details_url)
 from src.scraper.up_rera import UPRERAScraper
 from src.scraper.project_details_extractor import ProjectDetailsExtractor
-from src.scraper.validation import InvalidProjectDetails
+from src.scraper.validation import InvalidProjectDetails, is_valid_result
 from src.scraper.district_dataset import (is_already_scraped, save_project_json,
     build_result, build_error_result, build_dataset_from_directory, project_json_path)
 from src.scraper.detail_page import scrape_detail_page

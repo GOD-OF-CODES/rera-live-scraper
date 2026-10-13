@@ -24,6 +24,8 @@ backups/
 .vercel/
 .pytest_cache/
 data/
+db_schema/output.txt
+db_schema/reports/
 *.pem
 *.key
 .vercel

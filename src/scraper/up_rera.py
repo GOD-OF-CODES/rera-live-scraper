@@ -1,3 +1,6 @@
+import re
+from typing import Optional
+
 from playwright.sync_api import Page
 from src.scraper.project_links import (DETAILS_URL, normalize_details_url,
     normalize_registration, project_ids_from_viewstate)
@@ -41,6 +44,86 @@ class UPRERAScraper:
         print("Search page opened.")
         print("URL:", self.page.url)
 
+    # ---------------------------------------------------------
+    # REGISTRATION NUMBER INPUT
+    # ---------------------------------------------------------
+
+    def find_registration_input(self):
+        selectors = [
+            "#ContentPlaceHolder1_txtRegNo",
+            "input[name*='Reg']",
+            "input[id*='Reg']",
+            "input[placeholder*='Registration']"
+        ]
+
+        for selector in selectors:
+            try:
+                locator = self.page.locator(selector)
+
+                for index in range(locator.count()):
+                    element = locator.nth(index)
+
+                    if not element.is_visible():
+                        continue
+
+                    attributes = " ".join(
+                        [
+                            element.get_attribute("id") or "",
+                            element.get_attribute("name") or "",
+                            element.get_attribute("placeholder") or ""
+                        ]
+                    ).lower()
+
+                    if (
+                        "reg" in attributes
+                        or "registration" in attributes
+                    ):
+                        return element
+
+            except Exception:
+                continue
+
+        # Final fallback:
+        # inspect visible text inputs
+        inputs = self.page.locator(
+            "input[type='text'], input:not([type])"
+        )
+
+        for index in range(inputs.count()):
+            element = inputs.nth(index)
+
+            try:
+                if element.is_visible():
+                    return element
+            except Exception:
+                continue
+
+        return None
+
+    def fill_registration_number(
+        self,
+        registration_number: str
+    ):
+        registration_number = (
+            registration_number.strip().upper()
+        )
+
+        input_box = self.find_registration_input()
+
+        if not input_box:
+            raise RuntimeError(
+                "Registration number input field "
+                "could not be found."
+            )
+
+        input_box.fill(registration_number)
+
+        self.page.wait_for_timeout(500)
+
+        print(
+            f"Registration number entered: "
+            f"{registration_number}"
+        )
 
     # ---------------------------------------------------------
     # DISTRICT DROPDOWN (district-wide search)
@@ -293,7 +376,8 @@ class UPRERAScraper:
     def _build_row_data_from_raw(self, raw: dict) -> dict:
         """
         Turn one {values, links} dict (as produced by the JS in
-        extract_all_rows_data) into a project summary record.
+        extract_all_rows_data) into the same shape extract_row_data
+        used to return, so nothing downstream needs to change.
         """
 
         values = raw.get("values", [])
@@ -338,6 +422,102 @@ class UPRERAScraper:
             "internal_project_id": project_id,
         }
 
+    def get_result_data_rows(self):
+        """
+        DEPRECATED / SLOW: kept only for backward compatibility.
+        Use extract_all_rows_data() instead, which does the same
+        job in one browser round-trip instead of thousands.
+
+        Return the GridView's data rows only (header and
+        pager rows excluded).
+
+        A row is considered a data row if its first cell is a
+        plain integer (the "S.No" column).
+        """
+
+        grid = self.page.locator(self.GRID_VIEW_ID)
+
+        if grid.count() == 0:
+            return []
+
+        rows = grid.locator("tr")
+
+        data_rows = []
+
+        for index in range(rows.count()):
+            row = rows.nth(index)
+
+            try:
+                cells = row.locator("td")
+
+                if cells.count() == 0:
+                    continue
+
+                first_cell = cells.nth(0).inner_text().strip()
+
+                if not first_cell.isdigit():
+                    continue
+
+                data_rows.append(row)
+
+            except Exception:
+                continue
+
+        return data_rows
+
+    def extract_row_data(self, row) -> dict:
+        """
+        Extract summary data from a single GridView row, without
+        needing the registration number known ahead of time.
+
+        Column layout (see data/raw/up_rera_result.html):
+            0 S.No | 1 Reg.Number | 2 Project Name |
+            3 Promoter Name | 4 District | 5 ProjectType |
+            6 Approval Certificate | 7 View Details |
+            8 View Project on Map
+        """
+
+        cells = row.locator("td")
+
+        values = []
+
+        for index in range(cells.count()):
+            values.append(
+                cells.nth(index).inner_text().strip()
+            )
+
+        registration_number = (
+            values[1] if len(values) > 1 else ""
+        ).strip().upper()
+
+        data = {
+            "registration_number": registration_number,
+            "project_name": (
+                values[2] if len(values) > 2 else ""
+            ),
+            "promoter_name": (
+                values[3] if len(values) > 3 else ""
+            ),
+            "district": (
+                values[4] if len(values) > 4 else ""
+            ),
+            "project_type": (
+                values[5] if len(values) > 5 else ""
+            ),
+            "approval_certificate": (
+                values[6] if len(values) > 6 else ""
+            ),
+            "raw_cells": values,
+        }
+
+        data["details_url"] = (
+            self.extract_details_url_from_row(
+                row,
+                registration_number
+            )
+        )
+
+        return data
 
     # ---------------------------------------------------------
     # PAGINATION (ASP.NET GridView "Page$N" postback links)
@@ -418,3 +598,96 @@ class UPRERAScraper:
                 break
 
             page_number += 1
+
+    def extract_project_data(
+        self,
+        row,
+        registration_number: str
+    ):
+        cells = row.locator("td")
+
+        values = []
+
+        for index in range(cells.count()):
+            values.append(
+                cells.nth(index).inner_text().strip()
+            )
+
+        data = {
+            "registration_number": registration_number,
+            "project_name": (
+                values[2] if len(values) > 2 else ""
+            ),
+            "promoter_name": (
+                values[3] if len(values) > 3 else ""
+            ),
+            "district": (
+                values[4] if len(values) > 4 else ""
+            ),
+            "project_type": (
+                values[5] if len(values) > 5 else ""
+            ),
+            "approval_certificate": (
+                values[6] if len(values) > 6 else ""
+            ),
+            "raw_cells": values
+        }
+
+        return data
+
+    # ---------------------------------------------------------
+    # PROJECT ID
+    # ---------------------------------------------------------
+
+    def extract_details_url_from_row(self, row, registration_number: str) -> Optional[str]:
+        self._read_project_ids()
+        project_id = self._project_ids.get(normalize_registration(registration_number))
+        if project_id:
+            return DETAILS_URL.format(project_id)
+        links = row.locator("a").evaluate_all(
+            "els => els.flatMap(a => [a.getAttribute('href'), a.getAttribute('onclick')])"
+        )
+        return next((url for link in links if (url := normalize_details_url(link))), None)
+
+    def open_project_details(
+        self,
+        registration_number: str,
+        row=None
+    ):
+        details_url = None
+
+        if row:
+            details_url = (
+                self.extract_details_url_from_row(
+                    row,
+                    registration_number
+                )
+            )
+
+        if not details_url:
+            raise RuntimeError(
+                "Could not determine project details URL."
+            )
+
+        # Handle relative URL
+        if details_url.startswith("/"):
+            details_url = (
+                "https://up-rera.in"
+                + details_url
+            )
+
+        print("\nProject Details URL:")
+        print(details_url)
+
+        self.page.goto(
+            details_url,
+            wait_until="domcontentloaded",
+            timeout=60000
+        )
+
+        self.page.wait_for_timeout(3000)
+
+        print("\nProject Details page opened.")
+        print("Current URL:", self.page.url)
+
+        return details_url
