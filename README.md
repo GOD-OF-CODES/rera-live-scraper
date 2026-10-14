@@ -1,10 +1,10 @@
 # UP-RERA project search
 
 Search the database for project names, builders, registration numbers, districts,
-sectors, addresses, plot numbers and khasra numbers. Opening a match fetches its
-**current details directly from UP-RERA** using the official internal project URL.
-The database stores search metadata and its source-check date; it does not present
-old project details as live information.
+sectors, addresses, plot numbers and khasra numbers. Opening a match loads its
+**complete saved details from the database**, even when UP-RERA is unavailable.
+The same fields, tables, document links and JSON download are preserved. Each result
+shows when the source was retrieved; saved data is never labelled live.
 
 ## Start locally
 
@@ -28,9 +28,10 @@ locally in `.env.local` and in Vercel environment variables for deployments.
    or `Khasra 123/4 Lucknow`. Indexed searches do not contact RERA or ask for a CAPTCHA.
 2. The database returns possible matches, addresses, matching parcel evidence and
    the date each source page was inspected. Results are paginated, 100 per page.
-3. Open a project in a new tab. The scraper fetches the official details page
-   immediately and validates its registration. It displays project fields, land
-   records, unit tables and document links, with a fresh retrieval timestamp.
+3. Open a project in a new tab. The server reads and losslessly decompresses its
+   latest successful database snapshot. It displays the same project fields, land
+   records, unit tables and document links, with the original source timestamp.
+   Missing snapshots produce an explicit message; normal reads never contact RERA.
 4. Use **Search RERA live** to check for newer or missing records. This uses RERA's
    normal CAPTCHA and scans source pages when the query needs address/parcel checks.
    Matches remain openable while the original tab continues searching.
@@ -131,8 +132,10 @@ matches when configured: `status: "select_project"`, `source: "database"`, `tota
 page. The historical endpoint name is retained for client compatibility.
 
 Use `{"query":"Sector 150 Noida", "live":true}` for the source/CAPTCHA flow.
-An official `https://up-rera.in/Frm_View_Project_Details.aspx?id=...` URL always
-fetches live. Internal IDs come from RERA's response; registration digits are
+With a configured database, an official
+`https://up-rera.in/Frm_View_Project_Details.aspx?id=...` URL reads a saved snapshot.
+Only an explicit `live: true` request uses RERA. Without any configured database,
+the existing standalone live mode remains available. Internal IDs come from RERA's response; registration digits are
 **not** reliable internal project IDs.
 
 Live continuation endpoints:
@@ -146,8 +149,11 @@ Live continuation endpoints:
 `GET /health` reports configured mode; `GET /api/catalog/coverage` checks the
 catalog. Interactive API documentation is at `/docs`. Database errors produce an
 explicit 503 and the UI retains the live-search option. They do not silently start
-a lengthy source scan. Full detail source errors are explicit; cached data is not
-labelled live or silently substituted.
+a lengthy source scan. Missing snapshots return 404 (`snapshot_unavailable`);
+database read/integrity failures return 503. `GET /api/projects/{registration_number}`
+returns the same `complete` result envelope as opening a project, including
+registrations containing `/`. Coverage includes snapshot count, uncompressed JSON
+bytes, compressed payload bytes, and oldest/newest retrieval dates.
 
 ## Vercel
 
@@ -156,12 +162,73 @@ limit. Configure Neon `DATABASE_URL` and `RERA_SESSION_KEY` in Vercel before dep
 The Neon Marketplace integration can supply the database variables automatically.
 Use a pooled TLS URL. Never copy production credentials into frontend code.
 
-The hosted app extracts server-rendered pages over HTTP and does not launch
-Chromium. CAPTCHA state is compressed and encrypted with the Fernet session key,
+The hosted app reads saved details from Neon. Explicit live requests extract
+server-rendered pages over HTTP without launching Chromium. CAPTCHA state is compressed and encrypted with the Fernet session key,
 returned as `session_state`, and supplied with continuation requests. Sessions
 expire after ten minutes. Local development uses one worker with in-memory state.
-Responses use `Cache-Control: no-store`; the search index itself is persistent.
+Responses use `Cache-Control: no-store`; the search index and detail snapshots are persistent.
 Documents/PDFs are fetched from RERA only when opened, not bulk-downloaded.
+
+## Complete project snapshots
+
+`rera_project_snapshots` stores one latest successful result per registration. Its
+`payload` is UTF-8 JSON, compactly serialized and compressed with zlib level 9 in a
+PostgreSQL BYTEA (SQLite BLOB locally). This preserves every extracted value,
+including unknown fields, lists, unit inventories, bank details and document URLs.
+It stores no duplicated normalized copies, previous versions, source HTML or PDF
+binaries. Raw size and SHA-256 checks detect corrupted payloads before serving.
+Document/PDF links still require the source website when clicked.
+
+Backfill known official directory links and publish resumable progress to Neon:
+
+```bash
+python -m scripts.backfill_project_snapshots --workers 8 --publish
+```
+
+This identity-checks each full source response, saves compressed local checkpoints
+in `data/project_snapshots.sqlite`, and publishes every 25 successful records.
+It retries failed source requests up to four times with fresh connections. Three
+consecutive connection/service failures stop scheduling additional pages, so an
+outage does not cause requests across the entire directory. Reruns
+skip successful records and first upload any local snapshots that were not yet
+published. Failures are recorded in `data/project_snapshots.report.json` and cause
+a nonzero exit status; they never erase a good snapshot. It refreshes known project
+URLs; collect a fresh directory separately to discover newly registered projects.
+
+To refresh snapshots older than seven days, run manually or from a trusted job:
+
+```bash
+python -m scripts.backfill_project_snapshots --workers 8 --max-age-days 7 --publish
+```
+
+No recurring job is scheduled automatically. Read requests never refresh the data.
+An older worker cannot overwrite newer data. Search-index publication only replaces
+its four search tables and leaves snapshots and collaborator tables intact. Local
+full-detail storage is separate from the local search index. Without a PostgreSQL
+URL, the app automatically reads `data/project_snapshots.sqlite` when present;
+`RERA_SNAPSHOT_PATH` can select another local snapshot file.
+
+Collaborators can read `GET /api/projects/{registration_number}`, use
+`ProjectSnapshots(configured_catalog()).get(registration_number)` in Python, or
+export ordinary full JSON accepted by the existing loader:
+
+```bash
+python -m scripts.export_project_snapshots --registration UPRERAPRJ256261
+python -m scripts.export_project_snapshots --all
+# Optional local source: --database data/project_snapshots.sqlite
+```
+
+Exports go to `data/full_project_results/`. Unlike raw BYTEA values in a SQL grid,
+these commands/API responses decompress the payload and preserve the original
+`property_data` structure. Then, from `db_schema/`, collaborators can run:
+
+```bash
+python -m scripts.backfill_db ../data/full_project_results
+```
+
+That optional normalized import uses additional storage and writes to the database
+configured for the collaborator tools. The website needs only the search index and
+compressed snapshots; it does not require the normalized copies.
 
 ## Collaborator database and agent workflow
 

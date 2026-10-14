@@ -100,8 +100,9 @@ def test_api_index_avoids_rera_and_live_override_works(catalog, monkeypatch):
         assert client.get('/api/catalog/coverage').json()['inspected'] == 3
         client.post('/api/live/search', json={'query': 'Sector 150 Noida', 'live': True})
         assert calls == ['Sector 150 Noida']
-        client.post('/api/live/search', json={'query': row('UPRERAPRJ1')['details_url']})
-        assert len(calls) == 2
+        missing = client.post('/api/live/search', json={'query': row('UPRERAPRJ1')['details_url']})
+        assert missing.status_code == 404
+        assert len(calls) == 1  # Missing snapshots must not trigger a live fetch.
 
 
 def test_database_failure_is_explicit_not_ten_minute_fallback(catalog, monkeypatch):

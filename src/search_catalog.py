@@ -1,7 +1,7 @@
 """Indexed official UP-RERA discovery, with PostgreSQL and local SQLite storage.
 
 Only the offline import/refresh commands write this database. Public requests
-use parameterized read queries and fetch project details from RERA on demand.
+use parameterized reads; complete details live in a separate snapshot table.
 """
 from contextlib import contextmanager
 import json
@@ -119,6 +119,8 @@ class Catalog:
                      WHERE registration_number=p.registration_number AND kind='khasra'
                      ORDER BY identifier) n) AS khasra_numbers
                 FROM rera_search_projects p""")
+        from src.project_snapshots import ProjectSnapshots
+        ProjectSnapshots(self).initialize()
 
     def metadata(self, values):
         with self.connection(write=True) as connection:

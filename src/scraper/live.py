@@ -141,11 +141,11 @@ def fetch_project_live(details_url, registration_number=None, summary=None):
         browser.close()
 
 
-def fetch_project_http(details_url, registration_number=None, summary=None):
+def fetch_project_http(details_url, registration_number=None, summary=None, *, session=None):
     from src.scraper.http_details import extract_html
     url = official_detail_url(details_url)
     requested_at = datetime.now(timezone.utc).isoformat()
-    with requests.get(url, timeout=(10, 60)) as response:
+    with (session or requests).get(url, timeout=(10, 60)) as response:
         response.raise_for_status()
         if official_detail_url(response.url) != url:
             raise LiveScrapeError("RERA returned an unexpected project redirect.")

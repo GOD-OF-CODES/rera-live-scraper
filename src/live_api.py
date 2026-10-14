@@ -1,4 +1,4 @@
-"""Indexed project discovery with on-demand, verified live RERA details."""
+"""Database-backed project discovery and complete saved details."""
 import asyncio
 import logging
 import os
@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 
 from src.scraper.live import LiveScraper, LiveScrapeError
 from src.search_catalog import configured_catalog
+from src.project_snapshots import ProjectSnapshots
+from src.scraper.live import official_detail_url
 
 
 class SearchInput(BaseModel):
@@ -32,9 +34,16 @@ class ProjectInput(StateInput):
     registration_number: str = Field(min_length=1, max_length=60)
 
 
-def create_app(scraper=None, catalog=None):
+def create_app(scraper=None, catalog=None, snapshots=None):
+    use_configured_catalog = scraper is None and catalog is None
     live = scraper or LiveScraper()
     catalog = catalog if catalog is not None else (configured_catalog() if scraper is None else None)
+    if snapshots is None and use_configured_catalog and catalog and not catalog.postgres:
+        from src.search_catalog import Catalog, ROOT
+        local_snapshots = Path(os.getenv('RERA_SNAPSHOT_PATH', ROOT / 'data/project_snapshots.sqlite'))
+        if local_snapshots.exists():
+            snapshots = ProjectSnapshots(Catalog(local_snapshots))
+    snapshots = snapshots or (ProjectSnapshots(catalog) if catalog else None)
     hosted = None
     if os.environ.get("VERCEL") or os.environ.get("RERA_STATELESS"):
         from src.scraper.hosted_sessions import HostedSessions
@@ -62,7 +71,7 @@ def create_app(scraper=None, catalog=None):
         live.close()
 
     app = FastAPI(title="UP-RERA Project Search", version="3.0.0", lifespan=lifespan,
-                  description="Search indexed RERA locations and parcels, then fetch current project details.")
+                  description="Search indexed RERA projects and read complete saved project details.")
     app.state.live_scraper = live
 
     @app.middleware("http")
@@ -93,7 +102,7 @@ def create_app(scraper=None, catalog=None):
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "mode": "indexed+live" if catalog else "live", "database_required": False,
+        return {"status": "ok", "mode": "database+live" if catalog else "live", "database_required": bool(catalog),
                 "persistent_cache": bool(catalog), "supported_sources": ["UP-RERA"]}
 
     @app.get('/api/catalog/coverage')
@@ -101,13 +110,15 @@ def create_app(scraper=None, catalog=None):
         if not catalog:
             return {'status': 'unavailable', 'projects': 0, 'inspected': 0}
         try:
-            return catalog.coverage()
+            return {**catalog.coverage(), **(snapshots.coverage() if snapshots else {})}
         except Exception:
             raise LiveScrapeError('The search database is temporarily unavailable. Live search is still available.',
                                  'database_unavailable', 503)
 
     @app.post("/api/live/search")
     def search(body: SearchInput):
+        if snapshots and not body.live and body.query.lower().startswith(('http:', 'https:')):
+            return saved_project(official_detail_url(body.query))
         if catalog and not body.live and not body.query.lower().startswith(('http:', 'https:')):
             try:
                 return catalog.search(body.query, offset=body.offset)
@@ -117,6 +128,24 @@ def create_app(scraper=None, catalog=None):
                 raise LiveScrapeError('The search database is temporarily unavailable. Use Search RERA live below.',
                                      'database_unavailable', 503) from None
         return execute('start', body.query)
+
+    def saved_project(identifier):
+        if not snapshots:
+            raise LiveScrapeError('The project database is not configured.', 'database_unavailable', 503)
+        try:
+            result = snapshots.get(identifier)
+        except Exception as exc:
+            logging.getLogger(__name__).warning('Snapshot lookup failed (%s)', type(exc).__name__)
+            raise LiveScrapeError('Saved project details are temporarily unavailable. Please try again.',
+                                 'database_unavailable', 503) from None
+        if result is None:
+            raise LiveScrapeError('Full details for this project have not been saved yet. Please try again after the next database update.',
+                                 'snapshot_unavailable', 404)
+        return {'status': 'complete', 'result': result}
+
+    @app.get('/api/projects/{registration_number:path}')
+    def project(registration_number: str):
+        return saved_project(registration_number)
 
     @app.post("/api/live/search/{session_id}/captcha")
     def captcha(session_id: str, body: CaptchaInput):
