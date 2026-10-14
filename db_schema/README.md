@@ -6,7 +6,13 @@ This folder is the **database/schema design deliverable** for the UP-RERA scrape
 
 Current flow:
 
-UP-RERA -> Browser/Scraper -> JSON -> PostgreSQL (via `db/loader.py`) -> API -> UI later
+UP-RERA or saved snapshots -> full project JSON -> PostgreSQL (via `db/loader.py`) -> collaborator API / agents
+
+These normalized tables are separate from the website's compressed snapshots.
+They support collaborator queries and agents; they are not a lossless archive of
+every source field. Use the snapshot export/API when you need the complete
+original result. Run the commands in this document from `db_schema/` with the
+root Python 3.12 virtual environment activated.
 
 The schema was designed from the three project JSON variations currently reviewed:
 
@@ -22,7 +28,7 @@ The schema was designed from the three project JSON variations currently reviewe
 | `data_dictionary.md` | Column-by-column database specification |
 | `ui_field_mapping.md` | What should eventually appear on the UI |
 | `er_diagram.md` | ER diagram in Mermaid format |
-| `schema.sql` | PostgreSQL DDL (approved design, unchanged) |
+| `schema.sql` | PostgreSQL DDL for a fresh collaborator database |
 | `ui_mockup.html` | Static UI mockup to visualize the proposed fields |
 | `db/connection.py` | Opens a DB connection using `DATABASE_URL` from `.env` |
 | `db/init_db.py` | Applies `schema.sql` to a fresh database |
@@ -41,6 +47,13 @@ Run each migration once, in order, against your existing database (in pgAdmin: o
 1. `db/migrations/001_add_documents_json.sql`
 2. `db/migrations/002_project_documents_view.sql`
 3. `db/migrations/003_remove_documents_summary.sql` (only needed if you applied migration 002 before this update)
+4. `db/migrations/006_project_name_text.sql` (allows complete project names longer than 255 characters; safe to rerun)
+
+The agent services additionally require migrations 004 and 005 as described in
+[agents/README.md](agents/README.md). Apply those once if their tables do not yet
+exist. Fresh `schema.sql` already includes the current core schema, but not the
+agent tables. Migration 006 preserves the documents view and its explicit grants;
+unexpected custom dependent views cause an atomic failure rather than being deleted.
 
 Then re-run `scripts/backfill_db.py` / `scripts/insert_json.py` so `documents_json` gets populated for projects already in your database.
 
@@ -72,6 +85,24 @@ Every project's documents are visible in two ways:
 5. Load data:
    - Single file: `python -m scripts.insert_json path/to/UPRERAPRJ14636.json`
    - Whole directory: `python -m scripts.backfill_db path/to/data/results`
+
+Use an empty development database you own for initial setup. `db.init_db` is not
+a migration command for an existing database. The collaborator tools read
+`db_schema/.env` or shell `DATABASE_URL`, not the website's `.env.local`.
+
+Input must contain complete `property_data` and its project identification.
+Directory summaries and empty detail payloads are rejected before opening a
+database connection, preventing placeholder names and misleading empty rows.
+From the repository root, export existing snapshots with
+`python -m scripts.export_project_snapshots --all`, then return here and run
+`python -m scripts.backfill_db ../data/full_project_results`.
+
+Backfill is repeatable: it updates the matching registration rather than creating
+another project. It reports loaded, skipped and failed files. Its exit code is 1
+if any file fails/is skipped, the directory is missing, or no project JSON exists;
+0 means all selected files loaded. Successful files remain committed even if
+another file fails, so correct the failed input and rerun. Missing source fields
+can legitimately remain NULL; a successful import does not invent missing data.
 
 ## Important design decision
 
@@ -107,12 +138,13 @@ The design + integration covers:
 - source/provenance information
 - inserting/updating scraper JSON into PostgreSQL (single file or bulk)
 
-## Not included yet
+## API and remaining scope
 
-- FastAPI/Flask API
-- frontend framework integration
-- document downloading/storage
-- AI risk scoring
+The read API is implemented in `api/main.py`. Install
+`pip install -r requirements-api.txt`, then run
+`uvicorn api.main:app --port 8002`; browse `/docs`. Agent endpoints are a separate
+service documented in `agents/README.md`.
 
-Those are later implementation phases.
-
+The static UI mockup is not a deployed collaborator frontend. Document processing
+has additional dependencies and external access requirements; full document
+mirroring and a verified legal-risk assessment are not provided by this schema.

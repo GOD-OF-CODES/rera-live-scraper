@@ -17,7 +17,7 @@
 | id | BIGINT GENERATED ALWAYS AS IDENTITY | No | PK | System | — |
 | registration_number | VARCHAR(50) | No | UNIQUE | top-level `registration_number` | RERA Registration Number |
 | rera_project_id | VARCHAR(50) | Yes | — | `identification.project_id` | RERA Project ID |
-| project_name | VARCHAR(255) | No | — | `identification.project_name` | Project Name |
+| project_name | TEXT | No | — | `identification.project_name` | Complete Project Name (migration 006 for existing databases) |
 | project_type | VARCHAR(100) | Yes | — | `search_result.project_type` | Project Type |
 | district | VARCHAR(150) | Yes | — | `search_result.district` | District |
 | approval_certificate | VARCHAR(255) | Yes | — | `search_result.approval_certificate` | Approval Certificate |

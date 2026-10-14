@@ -1,5 +1,16 @@
 # Agentic layer
 
+The default is `AGENT_FORCE_DIRECT=1`: deterministic database-backed execution,
+without an LLM API key. Five agent endpoints have direct-mode integration smoke
+tests in `tests/test_collaborator_handoff.py`. Their success does not establish
+that the source data is complete or that an external land-record lookup is real:
+the shared external lookup adapter is currently a **mock**.
+
+OCR requires the Tesseract system executable as well as the Python dependencies.
+To use optional LLM mode, set `AGENT_FORCE_DIRECT=0` and configure the selected
+backend (`AGENT_LLM_BACKEND=ollama` with a running model, or `anthropic` with your
+own key). These external dependencies are separate from database setup.
+
 ## Setup (one-time)
 
 ```
@@ -7,7 +18,8 @@ cd db_schema
 pip install -r agents/requirements-agents.txt
 ```
 
-Add to `.env` (alongside the existing `DATABASE_URL`):
+Copy `db_schema/.env.example` to `db_schema/.env` and configure `DATABASE_URL`.
+Only when using the optional Anthropic backend, add:
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
@@ -36,7 +48,7 @@ agents/
     test_manual.py          - smoke test, run directly
   document_processing/      - your teammate's subagent (see below)
     storage.py                - DB read/write, already done
-    extractor.py                - process_document() - fill this in
+    extractor.py                - document extraction / OCR implementation
   api.py                        - FastAPI endpoints for all of the above
 ```
 
@@ -69,9 +81,8 @@ empty until the Document Processing tool writes to it via
 then, Property Identification just sees an empty list and carries on
 (it does not fail or wait on it).
 
-Once your teammate fills in `extractor.py`'s `process_document()` and
-runs the pending queue, Property Identification (and later, Ownership
-& Title / Registration & Encumbrance once those are built) will
+Once Document Processing runs the pending queue, Property Identification,
+Ownership & Title and Registration & Encumbrance will
 automatically start seeing that data on the next run - no changes
 needed on this side.
 

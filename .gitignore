@@ -30,3 +30,4 @@ db_schema/reports/
 *.key
 .vercel
 .env*
+!**/.env.example

@@ -8,8 +8,8 @@ Public entry point:
     insert_project_json(data: dict) -> Optional[int]
 
     Returns the project's internal `projects.id` on success, or
-    None if the JSON represents a not-found / failed scrape
-    (project_found is False or property_data is missing).
+    None if the JSON is marked not found or details unavailable.
+    Raises ValueError for incomplete or mismatched project details.
 
 Mapping (see ../data_dictionary.md for the authoritative spec):
 
@@ -161,6 +161,7 @@ def _upsert_project(cur, data: Dict[str, Any], promoter_id: Optional[int]) -> in
     property_data = data.get("property_data", {}) or {}
     identification = property_data.get("identification", {}) or {}
     search_result = data.get("search_result", {}) or {}
+    basic = property_data.get("basic_details", {}) or {}
     page = property_data.get("page", {}) or {}
 
     project_name = (
@@ -202,8 +203,8 @@ def _upsert_project(cur, data: Dict[str, Any], promoter_id: Optional[int]) -> in
             "registration_number": data.get("registration_number"),
             "rera_project_id": identification.get("project_id"),
             "project_name": project_name,
-            "project_type": search_result.get("project_type"),
-            "district": search_result.get("district"),
+            "project_type": search_result.get("project_type") or basic.get("project_category") or basic.get("project_type"),
+            "district": search_result.get("district") or basic.get("district"),
             "approval_certificate": search_result.get("approval_certificate"),
             "registration_date": parse_date(identification.get("registration_date")),
             "promoter_id": promoter_id,
@@ -455,8 +456,8 @@ def insert_project_json(data: Dict[str, Any]) -> Optional[int]:
     a single transaction.
 
     Returns the project's `projects.id` on success, or None if
-    the JSON is a not-found / failed scrape (no property_data to
-    insert).
+    the JSON is marked not found or details unavailable. Incomplete
+    or mismatched details raise ValueError before opening a connection.
     """
 
     registration_number = data.get("registration_number")
@@ -474,6 +475,17 @@ def insert_project_json(data: Dict[str, Any]) -> Optional[int]:
             f"project_details_available={details_available}"
         )
         return None
+
+    property_data = data.get("property_data")
+    identification = property_data.get("identification") if isinstance(property_data, dict) else None
+    if not isinstance(identification, dict) or not identification.get("project_name"):
+        raise ValueError(
+            "Full project detail JSON with identification.project_name is required. "
+            "Export a saved project snapshot; search-catalog summaries and empty details cannot be loaded."
+        )
+    source_id = identification.get("project_id")
+    if source_id and "".join(str(source_id).split()).upper() != "".join(str(registration_number).split()).upper():
+        raise ValueError("The registration number does not match the project identity in the JSON")
 
     conn = get_connection()
 

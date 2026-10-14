@@ -27,6 +27,8 @@ DEFAULT_RESULTS_DIR = Path("../data/results")
 
 def backfill(results_dir: Path):
 
+    if not results_dir.is_dir():
+        raise ValueError(f"Results directory does not exist: {results_dir}")
     files = sorted(
         file_path
         for file_path in results_dir.glob("*.json")
@@ -34,8 +36,7 @@ def backfill(results_dir: Path):
     )
 
     if not files:
-        print(f"No JSON files found in {results_dir.resolve()}")
-        return
+        raise ValueError(f"No project JSON files found in {results_dir.resolve()}")
 
     print(f"Found {len(files)} file(s) in {results_dir.resolve()}\n")
 
@@ -66,10 +67,16 @@ def backfill(results_dir: Path):
     print("\n" + "=" * 50)
     print(f"Loaded: {succeeded}   Skipped: {skipped}   Failed: {failed}")
     print("=" * 50)
+    return {"loaded": succeeded, "skipped": skipped, "failed": failed}
 
 
 if __name__ == "__main__":
 
     results_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_RESULTS_DIR
 
-    backfill(results_dir)
+    try:
+        summary = backfill(results_dir)
+    except ValueError as error:
+        print(error)
+        raise SystemExit(1)
+    raise SystemExit(1 if summary["failed"] or summary["skipped"] else 0)

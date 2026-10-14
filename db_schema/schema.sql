@@ -14,7 +14,7 @@ CREATE TABLE projects (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     registration_number VARCHAR(50) NOT NULL UNIQUE,
     rera_project_id VARCHAR(50),
-    project_name VARCHAR(255) NOT NULL,
+    project_name TEXT NOT NULL,
     project_type VARCHAR(100),
     district VARCHAR(150),
     approval_certificate VARCHAR(255),

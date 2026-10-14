@@ -1,3 +1,4 @@
+-c ../../constraints.txt
 # anthropic is only needed if you set AGENT_LLM_BACKEND=anthropic
 anthropic>=0.40.0
 # requests is what talks to your local Ollama server AND downloads

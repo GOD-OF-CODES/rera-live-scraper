@@ -8,12 +8,22 @@ shows when the source was retrieved; saved data is never labelled live.
 
 ## Start locally
 
+Use **Python 3.12** (the version used for the clean-install checks). Dependencies
+are pinned in `constraints.txt`; install through the requirements files below.
+
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m playwright install chromium
-.venv/bin/python main.py
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m playwright install chromium
+cp .env.example .env.local
+# Configure your database or supply the local data files described below.
+python main.py
 ```
+
+On Windows, create the environment with `py -3.12 -m venv .venv`, activate it
+with `.venv\Scripts\Activate.ps1`, and copy the template with
+`Copy-Item .env.example .env.local`. The remaining Python commands are the same.
 
 Open http://127.0.0.1:8000. Use `python main.py --port 8002` for another port.
 Set `RERA_DATABASE_URL` (or `DATABASE_URL`) in the ignored `.env.local` to use Neon.
@@ -21,6 +31,28 @@ Use a pooled PostgreSQL connection URL with TLS. If no URL is configured, the ap
 uses `data/rera_search.sqlite` when present; otherwise it supports live search only.
 Do not put credentials in Git or the browser. Database credentials are configured
 locally in `.env.local` and in Vercel environment variables for deployments.
+
+### Handing the repository to a collaborator
+
+The repository contains code and schema, **not database contents or credentials**.
+To reproduce saved-data searches, a collaborator needs one of:
+
+- An authorized PostgreSQL connection to the populated Neon database, supplied
+  privately as `RERA_DATABASE_URL`. Website reads need SELECT access to the search
+  tables, catalog view and `rera_project_snapshots`; maintenance needs additional
+  write/schema permissions. A GitHub invitation does not grant Neon access.
+- Copies of both `data/rera_search.sqlite` and `data/project_snapshots.sqlite`,
+  placed at those paths with no PostgreSQL URL configured. These provide local
+  saved-data search and details without connecting to Neon.
+
+Do not send your `.env.local` as part of a code archive. Give each collaborator
+appropriate database access separately. Without a populated database, the app
+starts in live-only mode and cannot reproduce saved search results during a RERA
+outage. PDFs remain external links even when project details are stored locally.
+
+After setup, check `/health` and `/api/catalog/coverage`, then search a known
+registration and open its full details. An empty database needs a data import;
+creating the tables alone does not populate them.
 
 ## How search works
 
@@ -282,13 +314,30 @@ that a module is unused.
 ## Verification and code
 
 ```bash
-python -m pip install pytest
+python -m pip install -r requirements-dev.txt
+python -m playwright install chromium
 python -m pytest tests -q
 ```
 
 Tests use local fixtures; they cover authoritative ID mapping, exact identifiers,
 sector boundaries, coverage/paging, invalid imports, query safety, index failure,
 CAPTCHA continuation and opening independent project tabs during a search.
+
+For real PostgreSQL loader, migration, backfill and API/agent integration checks:
+
+```bash
+python -m pip install -r db_schema/agents/requirements-agents.txt
+export TEST_DATABASE_URL=postgresql://USER:PASSWORD@localhost/isolated_test_db
+python -m pytest tests -q
+```
+
+Use a disposable development database. These tests create and drop their own
+randomly named schemas; they do not use `RERA_DATABASE_URL`. Without
+`TEST_DATABASE_URL`, PostgreSQL checks are explicitly skipped. Agent smoke checks
+use deterministic direct mode; they do not verify an external LLM, real external
+land-record searches, or OCR. The external land-record adapter is currently a
+mock. OCR additionally needs the system Tesseract executable; LLM mode needs its
+own configured provider/server. See the collaborator docs for these prerequisites.
 
 - `src/search_catalog.py`: schema, normalization, ingestion and indexed queries.
 - `src/live_api.py`, `src/live_dashboard.html`: API and search/detail UI.
