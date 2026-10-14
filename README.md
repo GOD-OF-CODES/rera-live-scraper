@@ -9,7 +9,8 @@ shows when the source was retrieved; saved data is never labelled live.
 ## Start locally
 
 Use **Python 3.12** (the version used for the clean-install checks). Dependencies
-are pinned in `constraints.txt`; install through the requirements files below.
+are pinned in `requirements.txt`, with optional tooling pinned by
+`constraints.txt`; install through the requirements files below.
 
 ```bash
 python3.12 -m venv .venv
