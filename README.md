@@ -47,6 +47,9 @@ A city is optional for a **database** parcel search; adding a district/village
 helps distinguish repeated numbers. The live parcel scan still requires a city
 or district to bound its work. RERA sometimes publishes combined khasra/plot
 columns; their labels are retained rather than inventing a more precise type.
+An explicit row type takes precedence over duplicate combined headings. Sector
+labels inside parcel cells are excluded from parcel identifiers and remain
+available through area search. Untyped combined records remain ambiguous.
 
 Coverage means the projects returned by the public UP-RERA directory at collection
 time, not every land parcel or every historical registration. `/api/catalog/coverage`
@@ -94,6 +97,19 @@ Then inspect the official project links and build the local database:
 python -m scripts.refresh_search_catalog --workers 6
 python -m scripts.build_search_catalog
 ```
+
+To correct an existing parcel index using saved full source records, without
+requesting RERA again:
+
+```bash
+python -m scripts.reindex_search_parcels --publish
+```
+
+This builds `data/rera_search_corrected.sqlite` separately, then atomically
+publishes only the search tables. It preserves full snapshots and collaborator
+tables. `build_search_catalog` also applies these classifications when
+`data/project_snapshots.sqlite` is available (`--snapshots` selects another file),
+so rebuilding from older checkpoints does not restore the incorrect types.
 
 The refresh writes atomic per-project checkpoints in `data/search_catalog/` and
 resumes after interruptions. It skips pages checked in the last seven days by

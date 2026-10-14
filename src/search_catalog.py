@@ -14,7 +14,8 @@ import time
 from dotenv import load_dotenv
 from src.scraper.live import official_detail_url
 from src.scraper.project_links import REGISTRATION, normalize_registration
-from src.scraper.search_intent import parcel_clues, words, matching_parcels
+from src.scraper.search_intent import (parcel_clues, words, matching_parcels,
+    parcel_identifiers, resolve_parcels, record_identifiers)
 
 ROOT = Path(__file__).resolve().parent.parent
 SECTOR = re.compile(r'\b(?:sector|sec\.?)\s*[-:]?\s*(\d+[a-z]?)\b', re.I)
@@ -61,9 +62,7 @@ def tokens(text, query=False):
 
 
 def identifiers(value):
-    return {re.sub(r'\s+', '', token).upper() for token in
-            re.findall(r'[a-z0-9]+(?:\s*[/\-]\s*[a-z0-9]+)*', str(value), re.I)
-            if any(c.isdigit() for c in token)}
+    return parcel_identifiers(value)
 
 
 class Catalog:
@@ -152,8 +151,8 @@ class Catalog:
                 parcels = record.get('property_data', {}).get('search_parcels', [])
                 # Explicitly labelled plot numbers in the official address are searchable too.
                 clues, _ = parcel_clues(address)
-                parcels = parcels + [dict(number=c['number'], kinds=['plot'], source='Published project address')
-                                     for c in clues if c['kind'] == 'plot']
+                parcels = resolve_parcels(parcels + [dict(number=c['number'], kinds=['plot'],
+                    explicit_type=True, source='Published project address') for c in clues if c['kind'] == 'plot'])
                 text = ' '.join(str(v or '') for v in [row['project_name'], row.get('promoter_name'),
                                 row['district'], basic.get('tehsil'), address, locality,
                                 ' '.join(p['number'] for p in parcels)])
@@ -172,7 +171,7 @@ class Catalog:
                 for token in sorted(tokens(text)):
                     self.execute(connection, 'INSERT INTO rera_search_tokens VALUES (?, ?)', (token, reg))
                 parcel_keys = {(kind, identifier, reg) for p in parcels for kind in p['kinds']
-                               if kind in {'plot', 'khasra'} for identifier in identifiers(p['number'])}
+                               if kind in {'plot', 'khasra'} for identifier in record_identifiers(p)}
                 for key in sorted(parcel_keys):
                     self.execute(connection, 'INSERT INTO rera_search_parcels VALUES (?, ?, ?)', key)
 
@@ -229,7 +228,7 @@ class Catalog:
                 'next_offset': offset + limit if offset + limit < total else None,
                 'coverage': coverage, 'elapsed_ms': round((time.perf_counter() - start) * 1000, 2),
                 'message': f'{total} database matches. Locations and parcels checked for {inspected} of {count} indexed projects. '
-                           'Open a project for current RERA details. The index reflects its last refresh; use live search to check for newer or missing records.'}
+                           'Open a project for saved RERA details. The index reflects its last refresh; use live search to check for newer or missing records.'}
 
 
 def configured_catalog():

@@ -21,9 +21,56 @@ def parcel_clues(query):
     return clues, remaining
 
 
+def parcel_identifiers(value):
+    # Published parcel cells sometimes include an address, e.g. "GH-13,
+    # SECTOR-22D". Sector numbers belong to location search, not parcel search.
+    value = re.sub(r'\b(?:sector|sec)\.?\s*[:#-]?\s*\d+[a-z]?(?:\s*/\s*\d+[a-z]?)*\b',
+                   ' ', str(value), flags=re.I)
+    return {re.sub(r'\s+', '', token).upper() for token in
+            re.findall(r'[a-z0-9]+(?:\s*[/\-]\s*[a-z0-9]+)*', value, re.I)
+            if any(c.isdigit() for c in token)}
+
+
 def identifier_matches(number, value):
-    tokens = re.findall(r'[a-z0-9]+(?:\s*[/\-]\s*[a-z0-9]+)*', str(value), re.I)
-    return number.upper() in {re.sub(r'\s+', '', token).upper() for token in tokens}
+    return number.upper() in parcel_identifiers(value)
+
+
+def record_identifiers(record):
+    values = parcel_identifiers(record['number'])
+    return values & set(record['identifiers']) if 'identifiers' in record else values
+
+
+def resolve_parcels(records):
+    """Explicit source types override generic duplicate tables per identifier.
+
+    Retain the full published value for evidence. An untyped combined column
+    stays ambiguous unless a typed row supplies the classification. If both
+    types are explicitly published for a number, preserve both.
+    """
+    typed = {}
+    for record in records:
+        if record.get('explicit_type'):
+            for identifier in record_identifiers(record):
+                typed.setdefault(identifier, set()).update(record['kinds'])
+    result, seen = [], set()
+    for record in records:
+        groups = {}
+        for identifier in sorted(record_identifiers(record)):
+            kinds = tuple(sorted(set(typed.get(identifier, record['kinds'])) & {'plot', 'khasra'}))
+            groups.setdefault((kinds, identifier in typed), []).append(identifier)
+        for (kinds, explicit), values in groups.items():
+            key = (record['number'], record['source'], tuple(values), kinds)
+            if kinds and key not in seen:
+                seen.add(key)
+                item = dict(record, kinds=list(kinds), explicit_type=explicit)
+                # Split only mixed classifications, avoiding repeated large
+                # published parcel lists for every individual identifier.
+                if set(values) != parcel_identifiers(record['number']):
+                    item['identifiers'] = values
+                else:
+                    item.pop('identifiers', None)
+                result.append(item)
+    return result
 
 
 def matching_parcels(clues, records, address):
@@ -36,7 +83,7 @@ def matching_parcels(clues, records, address):
     for clue in clues:
         hits = [record for record in records
                 if clue['kind'] in record['kinds']
-                and identifier_matches(clue['number'], record['number'])]
+                and clue['number'] in record_identifiers(record)]
         if not hits and clue['kind'] == 'plot':
             address_clues, _ = parcel_clues(address)
             if clue in address_clues:

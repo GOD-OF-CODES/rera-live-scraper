@@ -207,3 +207,53 @@ def test_empty_source_page_is_rejected_as_source_error():
     with pytest.raises(LiveScrapeError):
         parse_search_fields('', 'UPRERAPRJ123', include_parcels=True)
     assert parse_parcel_tables('') == []
+
+
+@pytest.mark.parametrize('kind,other', [('Khasra', 'plot'), ('Plot', 'khasra')])
+def test_typed_parcel_beats_generic_duplicate_and_required_type_header(kind, other):
+    from src.scraper.live import parse_parcel_tables
+    from src.scraper.search_intent import matching_parcels
+    html = page(REG, '638', kind=kind).replace('<th>Type</th>', '<th>Type <span>*</span></th>')
+    html += '<table><tr><th>Khasra/Plot Number *</th><th>Area</th></tr><tr><td>638</td><td>500</td></tr></table>'
+    records = parse_parcel_tables(html)
+    assert records and all(r['kinds'] == [kind.lower()] for r in records)
+    assert matching_parcels([{'kind': kind.lower(), 'number': '638'}], records, '')
+    assert not matching_parcels([{'kind': other, 'number': '638'}], records, '')
+
+
+@pytest.mark.parametrize('value,valid,invalid', [
+    ('GH-13, SECTOR- 22D', 'GH-13', ['SECTOR-22D', '22D']),
+    ('GH-02, SEC - 16, GREATER NOIDA', 'GH-02', ['SEC-16', '16']),
+    ('PLOT NO. 2, SECTOR 140 A NOIDA', '2', ['140']),
+    ('123 / 4, Sector 150', '123/4', ['150', '123']),
+    ('GH-15A SECTOR1', 'GH-15A', ['SECTOR1', '1']),
+])
+def test_location_suffix_is_not_a_parcel_identifier(value, valid, invalid):
+    assert identifier_matches(valid, value)
+    for number in invalid:
+        assert not identifier_matches(number, value)
+
+
+def test_mixed_generic_list_resolves_each_identifier_without_losing_evidence():
+    from src.scraper.search_intent import resolve_parcels, matching_parcels
+    records = resolve_parcels([
+        {'number': '12, 13, 14', 'kinds': ['plot', 'khasra'], 'source': 'combined'},
+        {'number': '12', 'kinds': ['plot'], 'source': 'typed', 'explicit_type': True},
+        {'number': '13', 'kinds': ['khasra'], 'source': 'typed', 'explicit_type': True},
+    ])
+    for kind, number, expected in [('plot', '12', True), ('khasra', '12', False),
+                                   ('plot', '13', False), ('khasra', '13', True),
+                                   ('plot', '14', True), ('khasra', '14', True)]:
+        evidence = matching_parcels([{'kind': kind, 'number': number}], records, '')
+        assert bool(evidence) == expected
+        if evidence:
+            assert evidence[0]['published_number'] == '12, 13, 14'
+    assert resolve_parcels(records) == records
+
+
+def test_two_explicit_types_for_same_number_remain_searchable():
+    from src.scraper.search_intent import resolve_parcels, matching_parcels
+    records = resolve_parcels([{'number': '12', 'kinds': [kind], 'source': kind, 'explicit_type': True}
+                               for kind in ['plot', 'khasra']])
+    for kind in ['plot', 'khasra']:
+        assert matching_parcels([{'kind': kind, 'number': '12'}], records, '')

@@ -226,17 +226,20 @@ def parse_parcel_tables(html, root=None):
                     headers[index] = ([kind for kind in ('khasra', 'plot') if kind in label], value)
             if headers:
                 columns, width = headers, len(values)
-                type_column = next((i for i, v in enumerate(values) if v.lower() == 'type'), None)
+                type_column = next((i for i, v in enumerate(values)
+                                    if re.sub(r'[^a-z]+', '', v.lower()) == 'type'), None)
                 continue
             if len(values) != width or any(cell.get('colspan', '1') != '1' for cell in cells):
                 continue
             for index, (kinds, label) in columns.items():
                 if index < len(values) and values[index]:
-                    record_type = values[type_column].lower() if type_column is not None else ''
+                    record_type = re.sub(r'[^a-z]+', '', values[type_column].lower()) if type_column is not None else ''
                     record_kinds = [record_type] if record_type in ('plot', 'khasra') else kinds
                     records.append({'number': values[index], 'kinds': record_kinds,
-                                    'source': f'Published RERA table: {label}'})
-    return records
+                                    'source': f'Published RERA table: {label}',
+                                    'explicit_type': record_type in ('plot', 'khasra')})
+    from src.scraper.search_intent import resolve_parcels
+    return resolve_parcels(records)
 
 
 @dataclass

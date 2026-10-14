@@ -37,6 +37,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', default='data/search_catalog')
     parser.add_argument('--output', default='data/rera_search.sqlite')
+    parser.add_argument('--snapshots', default='data/project_snapshots.sqlite',
+                        help='Saved full source data used to resolve legacy parcel classifications, when available')
     parser.add_argument('--publish', action='store_true')
     args = parser.parse_args()
     source = Path(args.source)
@@ -48,6 +50,10 @@ def main():
     catalog = Catalog(args.output)
     catalog.initialize()
     catalog.import_rows(directory['rows'], directory['generated_at'], records)
+    if Path(args.snapshots).is_file():
+        from scripts.reindex_search_parcels import repair
+        from src.project_snapshots import ProjectSnapshots
+        repair(catalog, ProjectSnapshots(Catalog(args.snapshots)), require_snapshots=False)
     catalog.metadata({'directory_fetched_at': directory['generated_at'],
                       'directory_projects': len(directory['rows']),
                       'index_built_at': datetime.now(timezone.utc).isoformat(),
