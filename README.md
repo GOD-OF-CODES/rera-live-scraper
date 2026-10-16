@@ -116,7 +116,7 @@ WHERE district = 'Gautam Buddha Nagar';
 The schema is idempotent. Unrelated database tables are not dropped or modified.
 A summary-only or older import cannot overwrite newer inspected fields. Normal
 public API requests only read the database; imports run through local maintenance
-commands, outside Vercel's request time limit.
+commands and the daily updater, outside Vercel's request time limit.
 
 Collect a fresh all-UP directory through the official search form and its CAPTCHA:
 
@@ -165,7 +165,7 @@ python -m scripts.build_search_catalog --publish
 For a long refresh, `python -m scripts.refresh_search_catalog --workers 6 --publish`
 also publishes progress every 250 attempted pages and at completion. A failed
 publish retains the local checkpoints for retry. There is no public write/admin
-endpoint and no automatic recurring scrape scheduled by the web application.
+endpoint. The daily updater runs separately in GitHub Actions.
 
 Publishing uses PostgreSQL COPY in one transaction. Existing readers see the
 previous index until commit; a failed upload rolls back. It replaces only the
@@ -250,12 +250,72 @@ To refresh snapshots older than seven days, run manually or from a trusted job:
 python -m scripts.backfill_project_snapshots --workers 8 --max-age-days 7 --publish
 ```
 
-No recurring job is scheduled automatically. Read requests never refresh the data.
+The daily updater described below checks known projects each morning. Read
+requests never refresh the data.
 An older worker cannot overwrite newer data. Search-index publication only replaces
 its four search tables and leaves snapshots and collaborator tables intact. Local
 full-detail storage is separate from the local search index. Without a PostgreSQL
 URL, the app automatically reads `data/project_snapshots.sqlite` when present;
 `RERA_SNAPSHOT_PATH` can select another local snapshot file.
+
+## Daily update agent
+
+[Daily UP-RERA update](.github/workflows/daily-rera-update.yml) runs every day at
+**06:00 IST** (`30 0 * * *` UTC) on GitHub Actions, independently of your Mac and
+Vercel. Configure the repository secret **`RERA_UPDATER_DATABASE_URL`** with an
+authorized connection to the populated Neon database. It needs SELECT/INSERT/
+UPDATE on snapshots and updater tables, SELECT/INSERT/UPDATE/DELETE on the search
+tables, and CREATE for the two updater tables on the first run. Do not commit the
+connection URL. The workflow runs only on `main`, with one update job at a time.
+
+1. Read all known project registrations and official detail URLs from Neon.
+2. Fetch each project's public detail page once, using the same extractor as live
+   results. Derive search fields from that same response. Four workers, request
+   delays and at most three attempts bound the load on RERA.
+3. Compare SHA-256 hashes of the exact source JSON values, including unknown
+   fields and document links. Request/delivery timestamps are excluded; whitespace,
+   types, field values and array order are retained. No LLM rewrites the data.
+4. If changed, replace the latest compressed full result and update its names,
+   address, area tokens and plot/khasra index **in one transaction**. Old search
+   tokens are removed. A failed write rolls back both details and index.
+5. If unchanged, retain the original compressed snapshot and retrieval timestamp;
+   record the successful check separately. The first run also aligns the search
+   index with the fetched source. It does not duplicate full project versions.
+6. On a timeout, CAPTCHA, wrong identity or other source error, retain the saved
+   result. Repeated service/access failures stop new requests; incomplete runs
+   exit unsuccessfully and report unattempted projects. Old/unchecked records are
+   prioritized next time. Failed requests never mean a project should be deleted.
+
+Run manually from GitHub's **Actions → Daily UP-RERA update → Run workflow**.
+Manual dispatch defaults to a read-only dry run; set `dry_run=false` to publish.
+`limit=0` checks all indexed projects. The scheduled run always publishes changes.
+For local use, with `.env.local` configured:
+
+```bash
+python -m scripts.update_rera_database --dry-run --limit 5
+python -m scripts.update_rera_database
+# Optional: --database /path/to/populated-local.sqlite
+```
+
+The job summary and a 14-day report artifact show counts and changed section names,
+without publishing project payloads or database secrets. Neon also records
+`rera_update_state` (latest attempt, successful check, content change and hashes)
+and `rera_update_runs` (run summaries). The report defaults to the ignored
+`data/daily_update_report.json`. A partial run is never reported as complete.
+The job stops scheduling new source reads after 150 minutes and has a 180-minute
+host limit; committed progress survives interruption.
+
+Scope is the projects in `rera_search_projects`. The all-project directory still
+requires a human CAPTCHA: use `collect_search_directory` and the documented
+catalog import/publish workflow to add new registrations. The updater then checks
+them too. It checks extracted project fields and links, **not the contents of a PDF
+replaced behind an unchanged URL**. It does not synchronize separate collaborator
+databases; collaborators can re-export and backfill the updated snapshots.
+
+GitHub schedules can be delayed or dropped, and public-repository schedules are
+disabled after 60 days without repository activity. Monitor the Actions page and
+the latest `rera_update_runs` entry; re-enable the workflow if GitHub disables it.
+See [GitHub's scheduling rules](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
 
 Collaborators can read `GET /api/projects/{registration_number}`, use
 `ProjectSnapshots(configured_catalog()).get(registration_number)` in Python, or

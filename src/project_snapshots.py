@@ -4,6 +4,7 @@ Independent of the replaceable search index and the collaborator's normalized
 tables. Reads never contact UP-RERA. Only maintenance commands write snapshots.
 """
 from datetime import datetime, timezone
+from contextlib import nullcontext
 import hashlib
 import json
 import zlib
@@ -45,11 +46,11 @@ class ProjectSnapshots:
         return (reg, url, stamp.astimezone(timezone.utc).isoformat(), 'zlib-json-v1',
                 hashlib.sha256(raw).hexdigest(), len(raw), zlib.compress(raw, level=9))
 
-    def put_many(self, records):
+    def put_many(self, records, *, connection=None):
         # Validate all inputs before starting a transaction; failed scrapes never
         # replace a good snapshot. Older workers cannot overwrite newer results.
         rows = [self.pack(record) for record in records]
-        with self.catalog.connection(write=True) as conn:
+        with (nullcontext(connection) if connection is not None else self.catalog.connection(write=True)) as conn:
             for row in rows:
                 self.catalog.execute(conn, '''INSERT INTO rera_project_snapshots
                     (registration_number, details_url, scraped_at, encoding, sha256, raw_bytes, payload)
@@ -74,13 +75,15 @@ class ProjectSnapshots:
                 FROM rera_project_snapshots''').fetchone()
             return dict(row)
 
-    def get(self, identifier, *, original=False):
+    def get(self, identifier, *, original=False, connection=None):
         if identifier.lower().startswith(('http:', 'https:')):
             column, value = 'details_url', official_detail_url(identifier)
         else:
             column, value = 'registration_number', normalize_registration(identifier)
-        with self.catalog.connection() as conn:
-            row = self.catalog.execute(conn, 'SELECT * FROM rera_project_snapshots WHERE '+column+'=?', (value,)).fetchone()
+        if connection is None:
+            with self.catalog.connection() as conn:
+                return self.get(identifier, original=original, connection=conn)
+        row = self.catalog.execute(connection, 'SELECT * FROM rera_project_snapshots WHERE '+column+'=?', (value,)).fetchone()
         if row is None:
             return None
         if row['encoding'] != 'zlib-json-v1':
